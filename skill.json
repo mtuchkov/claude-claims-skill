@@ -1,6 +1,6 @@
 {
   "name": "ingest",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Ingest documents into atomic knowledge notes with semantic deduplication",
   "author": "crimeacs",
   "homepage": "https://github.com/crimeacs/claude-ingest-skill",
