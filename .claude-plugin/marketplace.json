@@ -1,0 +1,23 @@
+{
+  "name": "claude-ingest-skill",
+  "owner": {
+    "name": "crimeacs"
+  },
+  "metadata": {
+    "description": "Document ingestion skill for knowledge vaults",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "ingest",
+      "source": "./plugins/ingest",
+      "description": "Ingest PDFs, DOCX, and URLs into atomic knowledge notes with semantic deduplication",
+      "version": "1.0.0",
+      "author": {
+        "name": "crimeacs"
+      },
+      "keywords": ["knowledge-management", "obsidian", "zettelkasten", "pdf", "research"],
+      "category": "productivity"
+    }
+  ]
+}
