@@ -1,109 +1,306 @@
 # Sample Ingest Output
 
-This shows an example of what the `/ingest` skill creates when processing a document.
+This shows what the `/ingest` skill creates when processing a document.
 
 ## Example Session
 
 **User input:**
 ```
-/ingest ~/Downloads/rest-api-design-guide.pdf --title "REST API Design Best Practices"
+/ingest ~/Downloads/attention-is-all-you-need.pdf
 ```
 
-**Created note:** `literature/lit-rest-api-design-best-practices.md`
+**Output:**
+```
+Reading config... vault at ~/Documents/notes
+
+Extracting text from PDF...
+Document: 15 pages, ~12,000 words
+
+Analyzing and extracting concepts...
+
+Extracted 6 concepts from "Attention Is All You Need":
+
+1. self-attention (technique)
+2. multi-head-attention (technique)
+3. positional-encoding (technique)
+4. transformer-architecture (finding)
+5. scaled-dot-product-attention (technique)
+6. training-efficiency (benchmark)
+
+Checking for semantic duplicates...
+  ✓ self-attention → no similar notes
+  ✓ multi-head-attention → no similar notes
+  ✓ positional-encoding → found: lit-position-embeddings.md (0.78)
+    → New info: sinusoidal functions vs learned embeddings
+    → Will merge
+  ✓ transformer-architecture → no similar notes
+  ✓ scaled-dot-product-attention → no similar notes
+  ✓ training-efficiency → found: lit-training-speed.md (0.81)
+    → No new info (already covers GPU training time)
+    → Skipping
+
+Creating notes...
+
+Created source note:
+  literature/lit-attention-is-all-you-need.md
+
+Created 4 concept notes:
+  ✓ literature/lit-self-attention.md
+  ✓ literature/lit-multi-head-attention.md
+  ✓ literature/lit-transformer-architecture.md
+  ✓ literature/lit-scaled-dot-product-attention.md
+
+Merged into existing:
+  ✓ literature/lit-position-embeddings.md
+    Added: sinusoidal encoding as alternative to learned embeddings
+
+Skipped (already covered):
+  - training-efficiency → lit-training-speed.md
+```
 
 ---
 
-## Sample Note Content
+## Created Files
+
+### Source Index Note
+
+**File:** `literature/lit-attention-is-all-you-need.md`
 
 ```markdown
 ---
 tags:
-  - literature
-  - api-design
-  - rest
-source: "rest-api-design-guide.pdf"
+  - source/literature
+  - index
+  - machine-learning
+  - transformers
+source: "attention-is-all-you-need.pdf"
+author: "Vaswani et al."
+year: 2017
 ingested: 2024-01-15
 ---
 
-# REST API Design Best Practices
+# Attention Is All You Need
 
 ## Summary
 
-A comprehensive guide to designing RESTful APIs that are consistent, intuitive, and easy to maintain. Covers resource naming, HTTP methods, error handling, versioning, and pagination patterns used by major tech companies.
+Introduces the Transformer architecture, which relies entirely on attention mechanisms without recurrence or convolution. Achieves state-of-the-art results on machine translation while being significantly more parallelizable and faster to train than previous approaches.
 
-## Key Concepts
+## Interesting Takeaways
 
-- **Resource-oriented design**: URLs should represent resources (nouns), not actions. Use HTTP methods to indicate the action.
-- **HATEOAS**: Hypermedia As The Engine Of Application State - responses include links to related resources and available actions.
-- **Idempotency**: GET, PUT, DELETE should be idempotent. POST creates new resources and is not idempotent.
-- **Consistent error format**: Use standard HTTP status codes with a consistent JSON error body structure.
+The most surprising finding is how much simpler the Transformer is compared to previous seq2seq models. By removing recurrence entirely, they achieved a 10x speedup in training time. The attention visualizations are particularly compelling—you can actually see the model learning grammatical structure without being explicitly taught.
 
-## Highlights
+The claim that "attention is all you need" is bold but backed up: they match or beat complex encoder-decoder models on translation while using a more elegant architecture. The positional encoding approach (using sinusoidal functions) is clever—it lets the model generalize to longer sequences than seen during training.
 
-Key design principles from the guide:
+## Extracted Concepts
 
-- Use plural nouns for collections: `/users` not `/user`
-- Nest resources to show relationships: `/users/{id}/orders`
-- Use query parameters for filtering/sorting: `/users?status=active&sort=created_at`
-- Version in URL path for major versions: `/v1/users`
-- Return 201 with Location header for POST creating resources
-- Use 204 No Content for successful DELETE
+- [[lit-self-attention]] - Self-Attention Mechanism
+- [[lit-multi-head-attention]] - Multi-Head Attention
+- [[lit-transformer-architecture]] - Transformer Architecture
+- [[lit-scaled-dot-product-attention]] - Scaled Dot-Product Attention
 
-Error response format recommended:
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid email format",
-    "details": [...]
-  }
-}
-```
+## Metadata
 
-## Questions
-
-- How to handle breaking changes within a major version?
-- What's the best pagination strategy for large datasets (offset vs cursor)?
-- How to design APIs that need to return different representations of the same resource?
-
-## Related
-
-- [[api-versioning]] - Strategies for API version management
-- [[http-status-codes]] - Reference for when to use which codes
-- [[pagination-patterns]] - Comparison of offset vs cursor pagination
+- **Type:** paper
+- **Citation:** Vaswani et al. (2017)
+- **Ingested:** 2024-01-15
 ```
 
 ---
 
-## What the Skill Does
+### Concept Note: Self-Attention
 
-1. **Extracts text** from the PDF using `pdftotext` or `pandoc`
-2. **Reads config** from `~/.config/claude-note/config.toml` to find vault path
-3. **Analyzes content** to identify key concepts, highlights, and questions
-4. **Checks for duplicates** in existing vault notes
-5. **Creates the note** at `{vault_root}/literature/lit-rest-api-design-best-practices.md`
-6. **Confirms** what was created
+**File:** `literature/lit-self-attention.md`
 
-## Internal Note Example
+```markdown
+---
+tags:
+  - source/literature
+  - lit/technique
+  - machine-learning
+  - attention
+source: "[[literature/lit-attention-is-all-you-need]]"
+added: 2024-01-15
+---
 
-For internal documents, use `--internal`:
+# Self-Attention Mechanism
+
+Self-attention computes representations of a sequence by relating different positions within the same sequence. Each position attends to all positions in the previous layer, allowing the model to capture dependencies regardless of distance. This replaces recurrence, which processes sequences step-by-step.
+
+## Details
+
+The mechanism works by computing three vectors for each position:
+- **Query (Q)**: What this position is looking for
+- **Key (K)**: What this position offers
+- **Value (V)**: The actual content to aggregate
+
+Attention scores are computed as: `Attention(Q,K,V) = softmax(QK^T / √d_k) V`
+
+The scaling factor `√d_k` prevents the dot products from growing too large, which would push softmax into regions with tiny gradients.
+
+Key advantages over recurrence:
+- Constant path length between any two positions (O(1) vs O(n))
+- All positions computed in parallel
+- More interpretable—can visualize what attends to what
+
+## Relevance
+
+For Fi's behavior classification: self-attention could help the model understand temporal patterns in accelerometer data. A sudden spike in movement might need to "attend" to what happened 5 seconds ago (was the dog already running, or did it just start?).
+
+## Related
+
+- [[lit-multi-head-attention]] - Extension with multiple attention heads
+- [[lit-scaled-dot-product-attention]] - The core attention computation
+
+---
+
+*Source: Vaswani et al. (2017)*
+```
+
+---
+
+### Concept Note: Multi-Head Attention
+
+**File:** `literature/lit-multi-head-attention.md`
+
+```markdown
+---
+tags:
+  - source/literature
+  - lit/technique
+  - machine-learning
+  - attention
+source: "[[literature/lit-attention-is-all-you-need]]"
+added: 2024-01-15
+---
+
+# Multi-Head Attention
+
+Multi-head attention runs multiple attention operations in parallel, each with different learned projection matrices. This allows the model to attend to information from different representation subspaces at different positions—essentially learning multiple types of relationships simultaneously.
+
+## Details
+
+Instead of one attention function with d_model dimensions, they use h=8 parallel attention heads, each with d_k = d_v = d_model/h = 64 dimensions.
 
 ```
-/ingest ~/work/auth-service-spec.md --internal
+MultiHead(Q,K,V) = Concat(head_1, ..., head_h) W^O
+where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
 ```
 
-Creates: `internal/int-auth-service-spec.md` with internal note format.
+Each head learns different attention patterns:
+- Head 1 might focus on syntactic relationships
+- Head 2 might focus on semantic similarity
+- Head 3 might focus on positional proximity
+
+The paper shows attention visualizations where different heads clearly learn different linguistic patterns (anaphora resolution, phrase structure, etc.).
+
+Computational cost is similar to single-head attention with full dimensionality due to the reduced dimension per head.
+
+## Related
+
+- [[lit-self-attention]] - The base attention mechanism
+- [[lit-transformer-architecture]] - How multi-head attention fits in the full model
+
+---
+
+*Source: Vaswani et al. (2017)*
+```
+
+---
+
+### Merged Note Example
+
+**File:** `literature/lit-position-embeddings.md` (existed before, now updated)
+
+```markdown
+---
+tags:
+  - source/literature
+  - lit/technique
+  - machine-learning
+  - embeddings
+sources:
+  - "[[literature/lit-bert-paper]]"
+  - "[[literature/lit-attention-is-all-you-need]]"
+added: 2024-01-10
+updated: 2024-01-15
+---
+
+# Positional Embeddings
+
+Positional embeddings inject sequence order information into models that process all positions in parallel. Without them, a Transformer would treat "dog bites man" and "man bites dog" identically. Two main approaches exist: learned embeddings and fixed sinusoidal encodings.
+
+## Details
+
+**Learned embeddings** (BERT approach):
+- Train a separate embedding for each position (0, 1, 2, ... 512)
+- Simple and effective
+- Limited to max sequence length seen during training
+
+**Sinusoidal encoding** (original Transformer):
+- Uses sin/cos functions at different frequencies
+- No learned parameters
+- Can theoretically generalize to longer sequences
+
+## Additional Sources
+
+**From Attention Is All You Need (Vaswani 2017):**
+The paper introduces sinusoidal positional encodings as an alternative to learned embeddings. They use sin/cos functions with wavelengths forming a geometric progression from 2π to 10000·2π. This choice allows the model to learn relative positions because PE(pos+k) can be represented as a linear function of PE(pos). They found sinusoidal encodings performed nearly identically to learned embeddings on their translation tasks.
+
+## Related
+
+- [[lit-transformer-architecture]] - Full architecture using these encodings
+- [[lit-self-attention]] - The attention mechanism these complement
+
+---
+
+*Sources: Devlin 2018, Vaswani 2017*
+```
+
+---
 
 ## Dry Run Example
 
-Preview extraction without writing:
-
+**User input:**
 ```
 /ingest paper.pdf --dry-run
 ```
 
-Output shows:
-- Extracted summary, concepts, highlights
-- Target file path
-- Any existing similar notes found
-- No files are written
+**Output:**
+```
+=== DRY RUN ===
+
+Would create source note:
+  literature/lit-attention-is-all-you-need.md
+
+Would create 4 concept notes:
+  - literature/lit-self-attention.md
+  - literature/lit-multi-head-attention.md
+  - literature/lit-transformer-architecture.md
+  - literature/lit-scaled-dot-product-attention.md
+
+Would merge into existing:
+  - literature/lit-position-embeddings.md
+    New info: sinusoidal encoding functions, comparison with learned embeddings
+
+Would skip (already covered):
+  - "training efficiency" → literature/lit-training-speed.md (score: 0.81)
+    Reason: Both discuss GPU training time for Transformers
+
+No files written.
+```
+
+---
+
+## Internal Mode Example
+
+**User input:**
+```
+/ingest ~/work/deploy-process.md --internal
+```
+
+**Creates:**
+
+1. `internal/int-deploy-process.md` (source index)
+2. `internal/int-canary-deployment.md` (concept)
+3. `internal/int-rollback-procedure.md` (concept)
+4. `internal/int-deploy-approval-workflow.md` (concept)

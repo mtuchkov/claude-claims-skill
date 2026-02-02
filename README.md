@@ -1,34 +1,30 @@
 # claude-ingest-skill
 
-A Claude Code skill that turns documents (PDF, DOCX, URLs) into atomic, interconnected knowledge notes with semantic deduplication.
+A Claude Code skill that transforms documents into **atomic, interconnected concept notes** with semantic deduplication.
 
-## Features
+## What Makes This Different
 
-- **Semantic deduplication** - Merges similar concepts instead of creating duplicates
-- **Atomic notes** - Extracts 3-15 typed concepts per document, not monolithic summaries
-- **Multi-source accumulation** - One concept grows richer with each new source
-- **Dual mode** - Literature (research papers) vs Internal (team docs)
-- **Dry-run preview** - See what would be extracted before committing
+Unlike simple summarizers that create one page per document, this skill:
+
+| Traditional Summarizer | This Skill |
+|----------------------|------------|
+| 1 summary file per document | 5-15 separate concept files |
+| Concepts as bullet points | Each concept is standalone note |
+| No deduplication | Semantic search finds similar notes |
+| Content isolated per source | Concepts accumulate across sources |
+
+**Result:** A growing knowledge graph where each concept links to others and gets richer as you add sources.
 
 ## Installation
 
 ### Claude Code (recommended)
 
-Add the marketplace and install:
 ```
 /plugin marketplace add crimeacs/claude-ingest-skill
 /plugin install ingest@crimeacs-claude-ingest-skill
 ```
 
-Or use the interactive plugin manager:
-```
-/plugin
-```
-Then navigate to **Marketplaces** → Add `crimeacs/claude-ingest-skill`
-
 ### Manual Installation
-
-Clone to your skills directory:
 
 ```bash
 git clone https://github.com/crimeacs/claude-ingest-skill.git ~/.claude/skills/ingest
@@ -48,112 +44,205 @@ git clone https://github.com/crimeacs/claude-ingest-skill.git ~/.claude/skills/i
 | Argument | Description |
 |----------|-------------|
 | `[file-or-url]` | Path to document (.pdf, .docx, .md, .txt) or URL |
-| `--internal` | Create internal note instead of literature note |
-| `--title "..."` | Override the note title |
+| `--internal` | Create internal notes instead of literature notes |
+| `--title "..."` | Override the document title |
 | `--dry-run` | Preview extraction without writing files |
-
-### Output Modes
-
-- **Literature** (default): Creates `literature/lit-{slug}.md` for external research
-- **Internal** (`--internal`): Creates `internal/int-{slug}.md` for team docs
-
-## Prerequisites
-
-For full functionality (semantic deduplication, batch processing), install the `claude-note` CLI:
-
-```bash
-# Using uv (recommended)
-uv tool install git+https://github.com/crimeacs/claude-note.git
-
-# Or using pipx
-pipx install git+https://github.com/crimeacs/claude-note.git
-```
-
-Configure your vault:
-
-```bash
-claude-note setup
-```
-
-**Without CLI**: Basic ingestion still works using built-in tools (pdftotext, pandoc).
 
 ## How It Works
 
-1. **Extract** - Reads content from PDF, DOCX, Markdown, or URLs
-2. **Analyze** - Extracts key concepts, highlights, questions, and relationships
-3. **Deduplicate** - Checks for existing similar notes in your vault
-4. **Create** - Writes structured Markdown with frontmatter and wiki-links
+### 1. Extract Atomic Concepts
 
-## Example Output
+The skill analyzes your document and extracts 3-15 standalone concepts:
 
-```markdown
----
-tags:
-  - literature
-  - machine-learning
-  - transformers
-source: "attention-is-all-you-need.pdf"
-author: "Vaswani et al."
-year: 2017
-ingested: 2024-01-15
----
+```
+Input: attention-is-all-you-need.pdf
 
-# Attention Is All You Need
-
-## Summary
-
-Introduces the Transformer architecture, which relies entirely on attention
-mechanisms without recurrence or convolution. Achieves state-of-the-art
-results on machine translation.
-
-## Key Concepts
-
-- **Self-attention**: Compute representations by attending to different positions
-- **Multi-head attention**: Run attention multiple times in parallel
-- **Positional encoding**: Inject sequence order using sinusoidal functions
-
-## Highlights
-
-- Training takes only 3.5 days on 8 GPUs (vs weeks for RNNs)
-- Achieves 28.4 BLEU on EN-DE translation
-
-## Questions
-
-- How do positional encodings compare to learned embeddings?
-- What are the memory requirements for very long sequences?
-
-## Related
-
-- [[transformers]] - Architecture family
-- [[attention-mechanisms]] - Core concept
+Extracted concepts:
+- self-attention (technique)
+- multi-head-attention (technique)
+- positional-encoding (technique)
+- transformer-architecture (finding)
+- scaled-dot-product-attention (technique)
 ```
 
-## Vault Structure
+### 2. Semantic Deduplication
 
-Notes are created in your configured vault:
+Before creating each note, the skill searches your vault for similar existing concepts:
+
+```
+Checking for duplicates...
+✓ self-attention → no similar notes
+✓ positional-encoding → found: lit-position-embeddings.md (similarity: 0.78)
+  → New info detected: sinusoidal vs learned embeddings
+  → Will merge into existing note
+```
+
+### 3. Create or Merge
+
+**New concepts** get their own files:
+```
+Created: literature/lit-self-attention.md
+Created: literature/lit-multi-head-attention.md
+```
+
+**Overlapping concepts** merge into existing notes:
+```
+Merged into: literature/lit-position-embeddings.md
+  Added: sinusoidal encoding approach from Vaswani et al.
+```
+
+### 4. Source Index
+
+A source note links to all extracted concepts:
+
+```markdown
+# Attention Is All You Need
+
+## Extracted Concepts
+
+- [[lit-self-attention]] - Self-Attention Mechanism
+- [[lit-multi-head-attention]] - Multi-Head Attention
+- [[lit-transformer-architecture]] - Transformer Architecture
+```
+
+## Output Structure
 
 ```
 vault/
 ├── literature/
-│   ├── lit-attention-is-all-you-need.md
-│   └── lit-rest-api-design.md
+│   ├── lit-attention-is-all-you-need.md  ← Source index
+│   ├── lit-self-attention.md              ← Concept note
+│   ├── lit-multi-head-attention.md        ← Concept note
+│   └── lit-position-embeddings.md         ← Merged with new source
 └── internal/
-    ├── int-deployment-process.md
-    └── int-auth-service-spec.md
+    ├── int-deploy-process.md              ← Source index
+    ├── int-canary-deployment.md           ← Concept note
+    └── int-rollback-procedure.md          ← Concept note
 ```
 
-## Configuration
+## Prerequisites
 
-Configure via `~/.config/claude-note/config.toml`:
+### Required
+
+Configure your vault location in `~/.config/claude-note/config.toml`:
 
 ```toml
 vault_root = "~/Documents/my-vault"
 ```
 
+### Optional (for semantic deduplication)
+
+Install [qmd](https://github.com/tobi/qmd) and index your vault:
+
+```bash
+# Install qmd
+brew install qmd  # or your package manager
+
+# Index your vault
+cd ~/Documents/my-vault
+qmd index
+qmd embed  # For vector search
+```
+
+Without qmd, the skill falls back to filename matching for deduplication.
+
+### For PDF extraction
+
+```bash
+# macOS
+brew install poppler pandoc
+
+# Linux
+apt install poppler-utils pandoc
+```
+
+## Concept Note Format
+
+Each concept is a standalone note:
+
+```markdown
+---
+tags:
+  - source/literature
+  - lit/technique
+  - machine-learning
+source: "[[literature/lit-attention-paper]]"
+added: 2024-01-15
+---
+
+# Self-Attention Mechanism
+
+Self-attention computes representations by relating different positions
+within the same sequence. Each position attends to all positions,
+capturing dependencies regardless of distance.
+
+## Details
+
+The mechanism uses Query, Key, Value vectors...
+
+## Related
+
+- [[lit-multi-head-attention]]
+- [[lit-transformer-architecture]]
+
+---
+
+*Source: Vaswani et al. (2017)*
+```
+
+## Multi-Source Accumulation
+
+When you ingest another paper covering the same concept, it merges:
+
+```markdown
+---
+sources:
+  - "[[literature/lit-attention-paper]]"
+  - "[[literature/lit-bert-paper]]"     ← Added
+updated: 2024-01-20                      ← Updated
+---
+
+# Self-Attention Mechanism
+
+{Original content}
+
+## Additional Sources
+
+**From BERT Paper (Devlin 2018):**
+Adds bidirectional context—attends to both left and right tokens.
+Pre-training with masked language modeling improves downstream tasks.
+```
+
+## Modes
+
+### Literature Mode (default)
+
+For external research: papers, articles, documentation.
+
+- Creates `lit-*` files in `literature/`
+- Extracts: findings, techniques, definitions, benchmarks
+- Includes citation metadata
+
+### Internal Mode (`--internal`)
+
+For team documentation: processes, architecture, decisions.
+
+- Creates `int-*` files in `internal/`
+- Extracts: processes, architecture, decisions, conventions
+- Includes owner/team metadata
+
+## Tips
+
+- Use `--dry-run` first to preview extraction
+- Review merged notes for quality
+- Add manual annotations after ingestion
+- For batch processing, use [claude-note CLI](https://github.com/crimeacs/claude-note)
+
 ## Related Projects
 
 - [claude-note](https://github.com/crimeacs/claude-note) - Full knowledge synthesis daemon
-- [Obsidian](https://obsidian.md) - Knowledge base that works on local Markdown files
+- [qmd](https://github.com/tobi/qmd) - Quick Markdown Search for semantic deduplication
+- [Obsidian](https://obsidian.md) - Knowledge base for local Markdown files
 
 ## License
 

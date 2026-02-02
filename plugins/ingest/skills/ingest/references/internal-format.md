@@ -1,17 +1,22 @@
-# Internal Note Format
+# Internal Note Formats
 
-Use this format when creating internal notes from team documents, processes, architecture docs, or internal specifications.
+This skill creates TWO types of notes for internal documentation:
 
-## Template
+1. **Source Index Note** - Links to all concepts extracted from a document
+2. **Concept Notes** - Standalone atomic notes for each concept
+
+## Source Index Note
+
+Created at: `internal/int-{source-slug}.md`
 
 ```markdown
 ---
 tags:
-  - internal
-  - {category-tag}
-  - {optional-additional-tags}
-source: "{filename-or-url}"
-owner: "{team-or-person-if-known}"
+  - source/internal
+  - index
+  - {category-tags}
+source: "{original-filename-or-url}"
+owner: "{Team or Person}"
 ingested: {YYYY-MM-DD}
 ---
 
@@ -19,146 +24,143 @@ ingested: {YYYY-MM-DD}
 
 ## Summary
 
-{2-3 sentence overview of what this document covers and why it matters}
+{2-3 sentence overview of what this document covers and WHY it matters}
 
-## Key Points
+## Extracted Concepts
 
-- **{Point 1}**: {Brief explanation}
-- **{Point 2}**: {Brief explanation}
-- **{Point 3}**: {Brief explanation}
+- [[int-{concept-1-slug}]] - {Concept 1 Title}
+- [[int-{concept-2-slug}]] - {Concept 2 Title}
+- [[int-{concept-3-slug}]] - {Concept 3 Title}
 
-## Details
+## Metadata
 
-{More detailed explanation of the most important aspects}
-
-### {Subsection if needed}
-
-{Details about a specific aspect}
-
-## Action Items / How-To
-
-{If applicable: specific steps, commands, or actions to take}
-
-1. {Step 1}
-2. {Step 2}
-3. {Step 3}
-
-## Questions / Gaps
-
-- {What's unclear or needs follow-up}
-- {Missing information to track down}
-
-## Related
-
-- [[{related-note-1}]] - {brief context}
-- [[{related-note-2}]] - {brief context}
+- **Type:** {process|architecture|decision|convention|reference|how-to}
+- **Owner:** {Team or Person}
+- **Ingested:** {YYYY-MM-DD}
 ```
 
-## Field Guidelines
+### Field Guidelines
 
-### Tags
-- Always include `internal`
-- Add category tag: `process`, `architecture`, `decision`, `convention`, `how-to`, `reference`
-- Optional: add project/team tags
+- **tags**: Always include `source/internal` and `index`
+- **source**: Original filename or internal URL (Confluence, Notion, etc.)
+- **owner**: Team or person responsible; omit if unknown
+- **Summary**: Focus on WHY this matters for a new team member
 
-### Source
-- For files: use the original filename
-- For URLs: use the full URL (e.g., Confluence, Notion link)
+---
 
-### Owner
-- Team or person responsible for this area
-- Omit the field entirely if unknown
+## Concept Note
 
-### Summary
-- 2-3 sentences maximum
-- Focus on WHY this matters, not just WHAT it covers
-- Write for a new team member who needs context
+Created at: `internal/int-{concept-slug}.md`
 
-### Key Points
-- The most important information from the document
-- Each should stand alone
-- Bold the key term, then explain
-
-### Details
-- Expand on the key points with specifics
-- Include code snippets, commands, or examples if relevant
-- Use subsections for organization if needed
-
-### Action Items / How-To
-- For process docs: specific steps to follow
-- For architecture docs: how to work with this system
-- For decisions: what to do as a result
-
-### Questions / Gaps
-- What's not clear from the document?
-- What needs follow-up with the team?
-- What might be outdated?
-
-### Related
-- Link to other internal notes
-- Link to relevant topic notes
-
-## Example
+Each concept is a **standalone note** that captures institutional knowledge.
 
 ```markdown
 ---
 tags:
-  - internal
-  - process
+  - source/internal
+  - int/{type}
+  - {category-tags}
+source: "[[internal/int-{source-slug}]]"
+owner: "{Team or Person}"
+added: {YYYY-MM-DD}
+---
+
+# {Concept Title}
+
+{2-4 sentence summary that fully explains this concept. A new team member should understand without additional context.}
+
+## Details
+
+{Specific information:
+- Step-by-step procedures
+- Commands or code snippets
+- Configuration examples
+- Decision rationale}
+
+## Related
+
+- [[{related-concept-1}]] - {brief context}
+- [[{related-concept-2}]] - {brief context}
+
+---
+
+*Source: {Document Name}*
+```
+
+### Concept Types
+
+Use these type tags (`int/{type}`):
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `process` | Workflow or procedure | "Deployment approval workflow" |
+| `architecture` | System design or structure | "Auth service architecture" |
+| `decision` | Why something was done a certain way | "Why we chose Postgres over MongoDB" |
+| `convention` | Team standards or patterns | "API naming conventions" |
+| `how-to` | Step-by-step guide | "How to set up local dev environment" |
+| `reference` | Lookup information | "Environment variable reference" |
+
+### Field Guidelines
+
+- **tags**: Include `source/internal`, type tag, and category tags
+- **source**: Wiki-link to the source index note
+- **owner**: Team or person responsible
+- **Summary**: 2-4 sentences, standalone, written for new team members
+- **Details**: Specific steps, commands, code, configuration
+
+---
+
+## Multi-Source Accumulation
+
+When the same concept appears in multiple internal docs:
+
+```markdown
+---
+tags:
+  - source/internal
+  - int/process
   - deployment
-source: "deploy-process-2024.md"
+sources:
+  - "[[internal/int-deploy-guide-2023]]"
+  - "[[internal/int-deploy-guide-2024]]"
 owner: "Platform Team"
-ingested: 2024-01-15
+added: 2023-06-01
+updated: 2024-01-15
 ---
 
 # Production Deployment Process
 
-## Summary
-
-Documents the standard deployment process for production services. Covers the approval workflow, rollback procedures, and monitoring requirements. Must be followed for all production changes.
-
-## Key Points
-
-- **Approval required**: All prod deploys need sign-off from on-call engineer
-- **Canary first**: 5% traffic for 15 minutes before full rollout
-- **Rollback window**: Keep previous version available for 24 hours
+{Current summary reflecting latest state}
 
 ## Details
 
-### Pre-deployment Checklist
+{Current details}
 
-Before initiating a deploy:
-1. Verify all tests pass on main branch
-2. Check #deploy-announcements for any freezes
-3. Confirm on-call engineer is available
+## Additional Sources
 
-### Canary Process
-
-The canary stage routes 5% of traffic to new version. Monitor these dashboards:
-- Error rate dashboard
-- Latency p99 dashboard
-- Business metrics dashboard
-
-If any metric degrades >10%, rollback immediately.
-
-## Action Items / How-To
-
-To deploy a service:
-
-1. Create deploy request in DeployBot: `/deploy servicename main`
-2. Wait for on-call approval (ping in #oncall if urgent)
-3. Confirm full rollout or rollback
-
-Rollback command: `/rollback servicename`
-
-## Questions / Gaps
-
-- What's the process for hotfixes outside business hours?
-- Need to document the exception process for bypassing canary
+**From Deploy Guide 2024 Update:**
+Canary percentage changed from 5% to 10%. New requirement: must have SRE approval for deploys after 4pm. Added automatic rollback trigger at 5% error rate increase.
 
 ## Related
 
-- [[deployment-checklist]] - Quick reference checklist
-- [[rollback-procedures]] - Detailed rollback steps
-- [[on-call-rotation]] - Current on-call schedule
+- [[int-rollback-procedures]]
+- [[int-oncall-rotation]]
+
+---
+
+*Sources: Deploy Guide 2023, Deploy Guide 2024*
 ```
+
+---
+
+## Example: Complete Extraction
+
+**Input:** `auth-service-architecture.md --internal`
+
+**Creates:**
+
+1. `internal/int-auth-service-architecture.md` (source index)
+2. `internal/int-jwt-token-flow.md` (concept)
+3. `internal/int-session-management.md` (concept)
+4. `internal/int-oauth-integration.md` (concept)
+5. `internal/int-auth-database-schema.md` (concept)
