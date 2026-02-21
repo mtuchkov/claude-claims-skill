@@ -1,259 +1,470 @@
-# Sample Ingest Output
+# Sample Claims Output
 
-This shows what the `/ingest` skill creates when processing a document.
+This shows what the `/claims` skill creates when processing a spec file.
 
 ## Example Session
 
 **User input:**
 ```
-/ingest ~/Downloads/attention-is-all-you-need.pdf
+/claims ~/docs/Multitenancy.md --system blitz-multitenancy
 ```
 
 **Output:**
 ```
 Reading config... vault at ~/Documents/notes
 
-Extracting text from PDF...
-Document: 15 pages, ~12,000 words
+Reading spec...
+Document: Multitenancy.md, ~1,800 words
 
-Analyzing and extracting concepts...
+Analyzing and extracting design claims...
 
-Extracted 6 concepts from "Attention Is All You Need":
+Extracted 8 claims from "Multitenancy.md" (blitz-multitenancy):
 
-1. self-attention (technique)
-2. multi-head-attention (technique)
-3. positional-encoding (technique)
-4. transformer-architecture (finding)
-5. scaled-dot-product-attention (technique)
-6. training-efficiency (benchmark)
+1. organizationid-on-every-model        (invariant)
+2. query-must-filter-by-orgid           (invariant)
+3. create-must-attach-orgid             (postcondition)
+4. update-delete-where-includes-orgid   (invariant)
+5. session-scoped-to-one-org            (constraint)
+6. entity-assigned-to-membership        (constraint)
+7. signup-creates-org-and-membership    (postcondition)
+8. superadmin-bypasses-org-filter       (guarantee)
 
 Checking for semantic duplicates...
-  ✓ self-attention → no similar notes
-  ✓ multi-head-attention → no similar notes
-  ✓ positional-encoding → found: lit-position-embeddings.md (0.78)
-    → New info: sinusoidal functions vs learned embeddings
+  ✓ organizationid-on-every-model       → no similar claims
+  ✓ query-must-filter-by-orgid          → no similar claims
+  ✓ create-must-attach-orgid            → no similar claims
+  ✓ update-delete-where-includes-orgid  → no similar claims
+  ✓ session-scoped-to-one-org           → found: claim-session-single-context.md (0.82)
+    → New info: orgId stored in PublicData; Blitz $setPublicData switch mechanism
     → Will merge
-  ✓ transformer-architecture → no similar notes
-  ✓ scaled-dot-product-attention → no similar notes
-  ✓ training-efficiency → found: lit-training-speed.md (0.81)
-    → No new info (already covers GPU training time)
-    → Skipping
+  ✓ entity-assigned-to-membership       → no similar claims
+  ✓ signup-creates-org-and-membership   → no similar claims
+  ✗ superadmin-bypasses-org-filter      → found: claim-superadmin-access.md (0.93)
+    → CONFLICT: existing says SUPERADMIN MAY read across orgs;
+                new spec says SUPERADMIN MUST bypass filter on ALL operations
+    → Flagged — file NOT written
 
-Creating notes...
+Creating files...
 
-Created source note:
-  literature/lit-attention-is-all-you-need.md
+Created index:
+  claims/blitz-multitenancy-claims-index.md
 
-Created 4 concept notes:
-  ✓ literature/lit-self-attention.md
-  ✓ literature/lit-multi-head-attention.md
-  ✓ literature/lit-transformer-architecture.md
-  ✓ literature/lit-scaled-dot-product-attention.md
+Created 6 claim files:
+  ✓ claims/claim-organizationid-on-every-model.md
+  ✓ claims/claim-query-must-filter-by-orgid.md
+  ✓ claims/claim-create-must-attach-orgid.md
+  ✓ claims/claim-update-delete-where-includes-orgid.md
+  ✓ claims/claim-entity-assigned-to-membership.md
+  ✓ claims/claim-signup-creates-org-and-membership.md
 
 Merged into existing:
-  ✓ literature/lit-position-embeddings.md
-    Added: sinusoidal encoding as alternative to learned embeddings
+  ✓ claims/claim-session-single-context.md
+    Added: orgId in Blitz PublicData; $setPublicData switch; roles array shape
 
-Skipped (already covered):
-  - training-efficiency → lit-training-speed.md
+Skipped (conflict — not written):
+  ✗ superadmin-bypasses-org-filter → claim-superadmin-access.md
+    Reason: MAY (read-only) vs MUST (all operations) contradicts existing claim
 ```
 
 ---
 
 ## Created Files
 
-### Source Index Note
+### Claims Index
 
-**File:** `literature/lit-attention-is-all-you-need.md`
-
-```markdown
----
-tags:
-  - source/literature
-  - index
-  - machine-learning
-  - transformers
-source: "attention-is-all-you-need.pdf"
-author: "Vaswani et al."
-year: 2017
-ingested: 2024-01-15
----
-
-# Attention Is All You Need
-
-## Summary
-
-Introduces the Transformer architecture, which relies entirely on attention mechanisms without recurrence or convolution. Achieves state-of-the-art results on machine translation while being significantly more parallelizable and faster to train than previous approaches.
-
-## Interesting Takeaways
-
-The most surprising finding is how much simpler the Transformer is compared to previous seq2seq models. By removing recurrence entirely, they achieved a 10x speedup in training time. The attention visualizations are particularly compelling—you can actually see the model learning grammatical structure without being explicitly taught.
-
-The claim that "attention is all you need" is bold but backed up: they match or beat complex encoder-decoder models on translation while using a more elegant architecture. The positional encoding approach (using sinusoidal functions) is clever—it lets the model generalize to longer sequences than seen during training.
-
-## Extracted Concepts
-
-- [[lit-self-attention]] - Self-Attention Mechanism
-- [[lit-multi-head-attention]] - Multi-Head Attention
-- [[lit-transformer-architecture]] - Transformer Architecture
-- [[lit-scaled-dot-product-attention]] - Scaled Dot-Product Attention
-
-## Metadata
-
-- **Type:** paper
-- **Citation:** Vaswani et al. (2017)
-- **Ingested:** 2024-01-15
-```
-
----
-
-### Concept Note: Self-Attention
-
-**File:** `literature/lit-self-attention.md`
+**File:** `claims/blitz-multitenancy-claims-index.md`
 
 ```markdown
 ---
 tags:
-  - source/literature
-  - lit/technique
-  - machine-learning
-  - attention
-source: "[[literature/lit-attention-is-all-you-need]]"
-added: 2024-01-15
+  - claims/index
+  - system/blitz-multitenancy
+created: 2026-02-20
+spec_file: "Multitenancy.md"
 ---
 
-# Self-Attention Mechanism
+# Design Claims: blitz-multitenancy
 
-Self-attention computes representations of a sequence by relating different positions within the same sequence. Each position attends to all positions in the previous layer, allowing the model to capture dependencies regardless of distance. This replaces recurrence, which processes sequences step-by-step.
+A Blitz.js multitenancy implementation guide defining tenant isolation via a
+shared database. Establishes the Organization → Membership → User data model,
+session-scoped org tracking, and mandatory query/mutation filtering patterns
+that collectively enforce tenant data boundaries.
 
-## Details
+## Claim Registry
 
-The mechanism works by computing three vectors for each position:
-- **Query (Q)**: What this position is looking for
-- **Key (K)**: What this position offers
-- **Value (V)**: The actual content to aggregate
+| ID      | Title                                    | Category      | File                                                    |
+|---------|------------------------------------------|---------------|---------------------------------------------------------|
+| CLM-001 | organizationId on Every Domain Model     | invariant     | [[claims/claim-organizationid-on-every-model]]          |
+| CLM-002 | Queries Must Filter by organizationId    | invariant     | [[claims/claim-query-must-filter-by-orgid]]             |
+| CLM-003 | Creates Must Attach organizationId       | postcondition | [[claims/claim-create-must-attach-orgid]]               |
+| CLM-004 | Updates/Deletes Must Include orgId Where | invariant     | [[claims/claim-update-delete-where-includes-orgid]]     |
+| CLM-005 | Session Scoped to One Org at a Time      | constraint    | [[claims/claim-session-single-context]]                 |
+| CLM-006 | Entity Assignments Target Membership     | constraint    | [[claims/claim-entity-assigned-to-membership]]          |
+| CLM-007 | Signup Atomically Creates Org + Member   | postcondition | [[claims/claim-signup-creates-org-and-membership]]      |
 
-Attention scores are computed as: `Attention(Q,K,V) = softmax(QK^T / √d_k) V`
+## Dependency Graph
 
-The scaling factor `√d_k` prevents the dot products from growing too large, which would push softmax into regions with tiny gradients.
+```
+CLM-002 → CLM-001
+CLM-003 → CLM-001
+CLM-004 → CLM-001
+CLM-004 → CLM-005
+CLM-006 → CLM-001
+```
 
-Key advantages over recurrence:
-- Constant path length between any two positions (O(1) vs O(n))
-- All positions computed in parallel
-- More interpretable—can visualize what attends to what
+## Unresolved Conflicts
 
-## Relevance
+### ⚡ CLM-NEW-008 vs [[claims/claim-superadmin-access]]
 
-For Fi's behavior classification: self-attention could help the model understand temporal patterns in accelerometer data. A sudden spike in movement might need to "attend" to what happened 5 seconds ago (was the dog already running, or did it just start?).
+| | Statement |
+|---|---|
+| **Existing** (`claim-superadmin-access.md`) | "A SUPERADMIN MAY read data across all organizations" |
+| **New spec** (`Multitenancy.md`) | "A SUPERADMIN MUST bypass organizationId filtering on all operations, including writes" |
 
-## Related
+**Action required:** MAY (read-only) vs MUST (all ops) is a meaningful security boundary.
+Confirm intended scope with the platform team before re-running.
 
-- [[lit-multi-head-attention]] - Extension with multiple attention heads
-- [[lit-scaled-dot-product-attention]] - The core attention computation
+## Source
 
----
-
-*Source: Vaswani et al. (2017)*
+- **Spec:** `Multitenancy.md`
+- **Extracted:** 2026-02-20
 ```
 
 ---
 
-### Concept Note: Multi-Head Attention
+### Claim Note: Invariant
 
-**File:** `literature/lit-multi-head-attention.md`
+**File:** `claims/claim-organizationid-on-every-model.md`
 
 ```markdown
 ---
+id: CLM-001
 tags:
-  - source/literature
-  - lit/technique
-  - machine-learning
-  - attention
-source: "[[literature/lit-attention-is-all-you-need]]"
-added: 2024-01-15
+  - claims/invariant
+  - system/blitz-multitenancy
+  - data-modeling
+  - multitenancy
+category: invariant
+system: blitz-multitenancy
+source: "[[claims/blitz-multitenancy-claims-index]]"
+added: 2026-02-20
 ---
 
-# Multi-Head Attention
+# organizationId on Every Domain Model
 
-Multi-head attention runs multiple attention operations in parallel, each with different learned projection matrices. This allows the model to attend to information from different representation subspaces at different positions—essentially learning multiple types of relationships simultaneously.
+> **Every domain model except User and Organization MUST carry an
+> `organizationId` foreign key referencing the owning Organization.**
 
-## Details
+## Rationale
 
-Instead of one attention function with d_model dimensions, they use h=8 parallel attention heads, each with d_k = d_v = d_model/h = 64 dimensions.
+Without an explicit `organizationId` on every entity, tenant isolation
+depends on join traversals — error-prone and easy to forget. A direct
+foreign key makes ownership visible, enforceable at the DB level, and
+indexable for query performance.
 
+## Violation Scenario
+
+A developer adds a `Comment` model linked only to `userId`. A query for
+comments filters by `where: { userId }` with no org clause. User A, who
+is also a member of Org B, reads Org B's comments by guessing a comment
+ID. No error is raised; the data leak is silent.
+
+## Assertion Hint
+
+```pseudo
+// Schema lint
+for each model in schema:
+  if model.name not in ["User", "Organization", "Membership"]:
+    assert: model has field "organizationId Int"
+    assert: model has @relation to Organization via organizationId
+
+// Migration guard
+assert: every Prisma migration that adds a new model
+        also adds an organizationId column and foreign key
 ```
-MultiHead(Q,K,V) = Concat(head_1, ..., head_h) W^O
-where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
+
+## Dependencies
+
+None
+
+---
+*Extracted from: Multitenancy.md — 2026-02-20*
 ```
-
-Each head learns different attention patterns:
-- Head 1 might focus on syntactic relationships
-- Head 2 might focus on semantic similarity
-- Head 3 might focus on positional proximity
-
-The paper shows attention visualizations where different heads clearly learn different linguistic patterns (anaphora resolution, phrase structure, etc.).
-
-Computational cost is similar to single-head attention with full dimensionality due to the reduced dimension per head.
-
-## Related
-
-- [[lit-self-attention]] - The base attention mechanism
-- [[lit-transformer-architecture]] - How multi-head attention fits in the full model
 
 ---
 
-*Source: Vaswani et al. (2017)*
-```
+### Claim Note: Invariant (query layer)
 
----
-
-### Merged Note Example
-
-**File:** `literature/lit-position-embeddings.md` (existed before, now updated)
+**File:** `claims/claim-query-must-filter-by-orgid.md`
 
 ```markdown
 ---
+id: CLM-002
 tags:
-  - source/literature
-  - lit/technique
-  - machine-learning
-  - embeddings
-sources:
-  - "[[literature/lit-bert-paper]]"
-  - "[[literature/lit-attention-is-all-you-need]]"
-added: 2024-01-10
-updated: 2024-01-15
+  - claims/invariant
+  - system/blitz-multitenancy
+  - security
+  - prisma
+category: invariant
+system: blitz-multitenancy
+source: "[[claims/blitz-multitenancy-claims-index]]"
+added: 2026-02-20
 ---
 
-# Positional Embeddings
+# Queries Must Filter by organizationId
 
-Positional embeddings inject sequence order information into models that process all positions in parallel. Without them, a Transformer would treat "dog bites man" and "man bites dog" identically. Two main approaches exist: learned embeddings and fixed sinusoidal encodings.
+> **Every Prisma read query on a tenant-scoped model MUST include
+> `organizationId: ctx.session.orgId` in the `where` clause.**
 
-## Details
+## Rationale
 
-**Learned embeddings** (BERT approach):
-- Train a separate embedding for each position (0, 1, 2, ... 512)
-- Simple and effective
-- Limited to max sequence length seen during training
+A shared-database multitenant system has no network or schema barrier
+between tenants. The `organizationId` filter is the sole runtime
+enforcement mechanism — omitting it on a single query is a data-leak
+vulnerability.
 
-**Sinusoidal encoding** (original Transformer):
-- Uses sin/cos functions at different frequencies
-- No learned parameters
-- Can theoretically generalize to longer sequences
+## Violation Scenario
 
-## Additional Sources
+A query for `GET /projects?id=42` runs:
+```ts
+db.project.findFirst({ where: { id: 42 } })
+```
+User in Org A submits `id=42`, which belongs to Org B. The query succeeds
+and returns Org B's data. No authorization error fires because the record
+exists and the user is authenticated.
 
-**From Attention Is All You Need (Vaswani 2017):**
-The paper introduces sinusoidal positional encodings as an alternative to learned embeddings. They use sin/cos functions with wavelengths forming a geometric progression from 2π to 10000·2π. This choice allows the model to learn relative positions because PE(pos+k) can be represented as a linear function of PE(pos). They found sinusoidal encodings performed nearly identically to learned embeddings on their translation tasks.
+## Assertion Hint
 
-## Related
+```pseudo
+// Static analysis rule (AST lint)
+for each db.*.findFirst / findMany / findUnique call:
+  assert: where clause contains "organizationId"
 
-- [[lit-transformer-architecture]] - Full architecture using these encodings
-- [[lit-self-attention]] - The attention mechanism these complement
+// Integration test — cross-tenant read attempt
+login as user_a (orgId = 1)
+seed: project { id: 99, organizationId: 2 }
+GET /projects/99 as user_a
+assert: response status is 404 or 403 — NOT 200
+```
+
+## Dependencies
+
+[[claims/claim-organizationid-on-every-model]] (CLM-001)
+
+---
+*Extracted from: Multitenancy.md — 2026-02-20*
+```
 
 ---
 
-*Sources: Devlin 2018, Vaswani 2017*
+### Claim Note: Constraint
+
+**File:** `claims/claim-entity-assigned-to-membership.md`
+
+```markdown
+---
+id: CLM-006
+tags:
+  - claims/constraint
+  - system/blitz-multitenancy
+  - data-modeling
+  - multitenancy
+category: constraint
+system: blitz-multitenancy
+source: "[[claims/blitz-multitenancy-claims-index]]"
+added: 2026-02-20
+---
+
+# Entity Assignments Target Membership, Not User
+
+> **Any entity assigned to a specific person within an organization (e.g.,
+> a Task) MUST store a `membershipId` foreign key, NOT a `userId` foreign key.**
+
+## Rationale
+
+A User can belong to multiple Organizations via separate Membership records.
+Assigning to `userId` leaves org context ambiguous — which of the user's
+memberships owns this record? A `membershipId` encodes both person and org
+in a single field, making ownership unambiguous.
+
+## Violation Scenario
+
+`Task.userId = 7`. User 7 belongs to Org A and Org B. A task query filters
+by `userId: 7` without an org clause — Org A's tasks leak to Org B context.
+Worse, when the user leaves Org A, tasks remain linked to a User with no
+active Membership there; business ownership is broken even though FK
+integrity holds.
+
+## Assertion Hint
+
+```pseudo
+// Schema lint
+for each model with assignment semantics (Task, Ticket, etc.):
+  assert: model has "membershipId Int" NOT "assigneeUserId Int"
+  assert: model has @relation to Membership via membershipId
+
+// Integration test — org-scoped assignment isolation
+user_a has membership_1 (org=1) and membership_2 (org=2)
+create task with membershipId = membership_1.id
+login as user_a, orgId = 2
+GET /tasks → assert: task NOT in response
+login as user_a, orgId = 1
+GET /tasks → assert: task IS in response
+```
+
+## Dependencies
+
+[[claims/claim-organizationid-on-every-model]] (CLM-001)
+
+---
+*Extracted from: Multitenancy.md — 2026-02-20*
+```
+
+---
+
+### Claim Note: Postcondition
+
+**File:** `claims/claim-signup-creates-org-and-membership.md`
+
+```markdown
+---
+id: CLM-007
+tags:
+  - claims/postcondition
+  - system/blitz-multitenancy
+  - data-modeling
+  - onboarding
+category: postcondition
+system: blitz-multitenancy
+source: "[[claims/blitz-multitenancy-claims-index]]"
+added: 2026-02-20
+---
+
+# Signup Atomically Creates Org and Membership
+
+> **A successful user signup MUST atomically create the User, an
+> Organization, and an OWNER Membership in a single database transaction.**
+
+## Rationale
+
+If any of the three records is absent after signup, the user lands in a
+broken state: no org means `ctx.session.orgId` is null, all queries fail,
+and there is no self-service recovery path. Atomicity guarantees all three
+exist or none do.
+
+## Violation Scenario
+
+The signup mutation creates the User first, then the Organization in a
+separate call. The second call throws a DB constraint error (duplicate org
+name). The User record now exists without an Organization or Membership.
+On next login, `session.$create()` reads `memberships[0]` as `undefined`.
+`orgId` becomes `undefined`. Every subsequent query throws
+`"Missing session.orgId"`.
+
+## Assertion Hint
+
+```pseudo
+// Integration test — happy path
+POST /signup { name, email, password, orgName }
+assert: db.user.count({ where: { email } }) == 1
+assert: db.organization.count({ where: { name: orgName } }) == 1
+assert: db.membership.count({ where: { userId, role: "OWNER" } }) == 1
+assert: all three records share the same organizationId
+
+// Integration test — atomicity on failure
+mock db.organization.create to throw
+POST /signup
+assert: db.user.count({ where: { email } }) == 0  // rolled back
+```
+
+## Dependencies
+
+None
+
+---
+*Extracted from: Multitenancy.md — 2026-02-20*
+```
+
+---
+
+### Merged Claim Note
+
+**File:** `claims/claim-session-single-context.md` (existed before, now updated)
+
+```markdown
+---
+id: CLM-005
+tags:
+  - claims/constraint
+  - system/blitz-multitenancy
+  - system/auth-service
+  - sessions
+  - multitenancy
+category: constraint
+system:
+  - auth-service
+  - blitz-multitenancy
+source: "[[claims/auth-service-claims-index]]"
+added: 2025-11-03
+updated: 2026-02-20
+---
+
+# Session Scoped to One Org at a Time
+
+> **A user session MUST be active in exactly one organization at a time;
+> switching organizations MUST replace the previous org context.**
+
+## Rationale
+
+Simultaneous multi-org access in a single session makes `ctx.session.orgId`
+ambiguous. A single active org enforces a clear authorization boundary:
+every query and mutation in the session knows exactly which tenant it is
+operating on.
+
+## Violation Scenario
+
+Two browser tabs share a session. Tab A is in Org 1; Tab B switches to Org 2
+via a concurrent `$setPublicData` call. Due to a session-update race, Tab A's
+next mutation reads `orgId = 2` from the shared session and writes into Org 2
+on behalf of an Org 1 user.
+
+## Assertion Hint
+
+```pseudo
+// From auth-service spec
+login → assert: session.orgId is exactly one integer, not null, not array
+
+// Org switch
+$setPublicData({ orgId: newOrgId })
+assert: session.orgId == newOrgId
+assert: session.orgId != previousOrgId
+assert: subsequent queries use newOrgId, not previousOrgId
+```
+
+## Additional Context (blitz-multitenancy, 2026-02-20)
+
+In Blitz.js, `orgId` lives in `Session.PublicData` declared in `types.ts`.
+Both `GlobalRole` and `MembershipRole` values coexist in the session `roles`
+array simultaneously. Org switching is performed via
+`session.$setPublicData({ orgId })`. The session is initialized at login with
+`memberships[0].organizationId` as the default active org.
+
+```pseudo
+// Blitz-specific initialization assertion
+POST /login
+assert: session.orgId == user.memberships[0].organizationId
+assert: session.roles includes user.role          // GlobalRole
+assert: session.roles includes memberships[0].role // MembershipRole
+```
+
+*Source: Multitenancy.md*
+
+## Dependencies
+
+None
+
+---
+*Sources: auth-service spec (2025-11-03), Multitenancy.md (2026-02-20)*
 ```
 
 ---
@@ -262,45 +473,77 @@ The paper introduces sinusoidal positional encodings as an alternative to learne
 
 **User input:**
 ```
-/ingest paper.pdf --dry-run
+/claims ~/docs/Multitenancy.md --system blitz-multitenancy --dry-run
 ```
 
 **Output:**
 ```
-=== DRY RUN ===
+=== DRY RUN — no files written ===
 
-Would create source note:
-  literature/lit-attention-is-all-you-need.md
+Would create index:
+  claims/blitz-multitenancy-claims-index.md
 
-Would create 4 concept notes:
-  - literature/lit-self-attention.md
-  - literature/lit-multi-head-attention.md
-  - literature/lit-transformer-architecture.md
-  - literature/lit-scaled-dot-product-attention.md
+Would create 6 claim files:
+  - claims/claim-organizationid-on-every-model.md       [invariant]
+  - claims/claim-query-must-filter-by-orgid.md          [invariant]
+  - claims/claim-create-must-attach-orgid.md            [postcondition]
+  - claims/claim-update-delete-where-includes-orgid.md  [invariant]
+  - claims/claim-entity-assigned-to-membership.md       [constraint]
+  - claims/claim-signup-creates-org-and-membership.md   [postcondition]
 
-Would merge into existing:
-  - literature/lit-position-embeddings.md
-    New info: sinusoidal encoding functions, comparison with learned embeddings
+Would merge into 1 existing file:
+  - claims/claim-session-single-context.md
+    New info: orgId in Blitz PublicData; $setPublicData switch; dual-role array
 
-Would skip (already covered):
-  - "training efficiency" → literature/lit-training-speed.md (score: 0.81)
-    Reason: Both discuss GPU training time for Transformers
+Would flag 1 conflict — NOT written:
+  ⚡ claim-superadmin-access.md vs CLM-NEW-008
+     Existing: "A SUPERADMIN MAY read data across all organizations"
+     New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
+     → Resolve before running without --dry-run
 
 No files written.
 ```
 
 ---
 
-## Internal Mode Example
+## Conflict-Only Example
 
 **User input:**
 ```
-/ingest ~/work/deploy-process.md --internal
+/claims ~/docs/Multitenancy-v2.md --system blitz-multitenancy
 ```
 
-**Creates:**
+**Output (excerpt):**
+```
+...
+  ✗ superadmin-bypasses-org-filter  → found: claim-superadmin-access.md (0.93)
+    → CONFLICT: existing scopes SUPERADMIN to reads only;
+                new spec mandates bypass on all operations including writes
+    → Flagged — NOT written
+  ✗ session-orgid-nullable          → found: claim-session-single-context.md (0.87)
+    → CONFLICT: existing says orgId MUST be set after login;
+                new spec says orgId MAY be null for pending-invite users
+    → Flagged — NOT written
+...
 
-1. `internal/int-deploy-process.md` (source index)
-2. `internal/int-canary-deployment.md` (concept)
-3. `internal/int-rollback-procedure.md` (concept)
-4. `internal/int-deploy-approval-workflow.md` (concept)
+=== Claims Extraction Complete (blitz-multitenancy) ===
+
+Created:   5 claim files
+Merged:    1 claim file
+Conflicts: 2 (NOT written — resolve first)
+Skipped:   0
+
+⚡ UNRESOLVED CONFLICTS — action required:
+
+  1. claim-superadmin-access.md vs CLM-NEW-008
+     Existing: "A SUPERADMIN MAY read data across all organizations"
+     New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
+     → Read-only vs all-operations is a security boundary decision.
+       Confirm with the platform team; update the winning file's modal verb.
+
+  2. claim-session-single-context.md vs CLM-NEW-005
+     Existing: "session.orgId MUST be set to an integer after login"
+     New spec:  "session.orgId MAY be null for users with pending-invite Memberships"
+     → Invited-but-not-yet-joined is a new session state not modeled in v1.
+       Scope the original claim to fully-joined users or replace it.
+```
