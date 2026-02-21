@@ -1,311 +1,300 @@
 ---
-name: ingest
-description: Ingest documents into atomic concept notes with semantic deduplication. Creates separate files per concept, not summaries.
-argument-hint: [file-or-url] [--internal] [--dry-run]
+name: claims
+description: Extract falsifiable design claims from a project spec — premises, invariants, guarantees, and constraints — structured for AI reasoning, assertion generation, and test scaffolding.
+argument-hint: [file-or-url] [--system <n>] [--dry-run]
 allowed-tools: Read, Write, Bash, WebFetch, mcp__qmd__vsearch, mcp__qmd__get
 ---
 
-# Document Ingestion Skill
+# Design Claims Extraction Skill
 
-When invoked with `/ingest`, follow these steps EXACTLY.
+When invoked with `/claims`, follow these steps EXACTLY.
 
 ## Step 1: Parse Arguments
 
 ```
-/ingest <file-or-url> [--internal] [--title "..."] [--dry-run]
+/claims <file-or-url> [--system <n>] [--dry-run]
 ```
 
-- `file-or-url`: Required. Path to file or URL
-- `--internal`: Use internal mode (team docs) instead of literature mode (research)
-- `--title "..."`: Override document title
-- `--dry-run`: Preview only, don't write files
+- `file-or-url`: Required. Path to spec file or URL.
+- `--system <n>`: Logical system name (e.g., "blitz-multitenancy"). Defaults to filename stem.
+- `--dry-run`: Preview extracted claims; do not write files.
 
 Set variables:
-- `MODE` = "internal" if `--internal`, else "literature"
-- `PREFIX` = "int" if internal, else "lit"
-- `FOLDER` = "internal" if internal, else "literature"
+- `SYSTEM` = value of `--system`, or filename stem
+- `PREFIX`  = "claim"
+- `FOLDER`  = "claims"
+
+---
 
 ## Step 2: Get Vault Path
 
-Run:
 ```bash
 cat ~/.config/claude-note/config.toml 2>/dev/null
 ```
 
-Look for `vault_root = "..."`. Extract the path.
+Extract `vault_root`. Set `OUTPUT_DIR` = `{vault_root}/claims/`.
 
-If no config found, ask user: "Where should I create notes? (e.g., ~/Documents/notes)"
+If no config, ask: "Where should I create claim files? (e.g., ~/Documents/notes)"
 
-Set `OUTPUT_DIR` = `{vault_root}/{FOLDER}/`
+---
 
-## Step 3: Read Document Content
+## Step 3: Read Spec Content
+
+Set `TITLE` from `--system` or filename.
 
 **For local files:**
-
 - `.md` or `.txt`: Use Read tool directly
 - `.pdf`: Run `pdftotext "{file}" - 2>/dev/null || pandoc "{file}" -t plain`
 - `.docx`: Run `pandoc "{file}" -t plain --wrap=none`
 
-**For URLs:**
-
-Use WebFetch to get the content.
+**For URLs:** Use WebFetch to get the content.
 
 Store in `CONTENT`. If longer than 100,000 characters, truncate and append `\n\n[... content truncated ...]`
 
-Set `TITLE` from `--title` argument, or derive from filename/URL.
+---
 
-## Step 4: Extract Atomic Concepts
+## Step 4: Extract Design Claims
 
-Analyze the document content and extract structured knowledge.
-
-**For LITERATURE mode**, extract this JSON structure:
+Analyze `CONTENT` and extract this JSON structure:
 
 ```json
 {
-  "source_summary": "2-3 sentence summary of what this document covers",
-  "source_type": "paper|review|report|documentation|article|other",
-  "key_citation": "Author et al. (Year) or Document Title",
-  "interesting_takeaways": "1-2 paragraph narrative of surprising/useful findings. Write conversationally. Focus on insights that could change how we approach work, specific numbers that stand out, counterintuitive findings.",
-  "notes": [
+  "system": "<system name>",
+  "spec_summary": "2-3 sentences: what this spec defines and its scope.",
+  "claims": [
     {
+      "id": "CLM-001",
       "slug": "kebab-case-max-50-chars",
-      "title": "Human Readable Title",
-      "type": "finding|technique|definition|benchmark|open-question",
-      "summary": "2-4 sentence STANDALONE explanation. Reader must understand without seeing source.",
-      "details": "Longer explanation with specific numbers, quotes, examples. Optional but recommended.",
-      "relevance": "How this connects to user's work domain. Null if general-purpose.",
-      "tags": ["topic-tag-1", "topic-tag-2"]
+      "title": "Human-readable label",
+      "category": "premise|invariant|guarantee|constraint|postcondition|precondition",
+      "statement": "Single falsifiable declarative sentence. Active voice, present tense, RFC 2119 modal. Example: 'Every domain model MUST carry an organizationId foreign key.'",
+      "rationale": "1-3 sentences: why this claim exists, which risk it mitigates.",
+      "violation_scenario": "Concrete example of what breaks if this claim is false. Name the data state and observable consequence.",
+      "assertion_hint": "Pseudo-code or natural language describing how to assert this in a unit/integration test or runtime check.",
+      "depends_on": ["CLM-00X"],
+      "tags": ["domain-tag"]
     }
   ]
 }
 ```
 
-**For INTERNAL mode**, extract this JSON structure:
+### Claim Categories — Definitions
 
-```json
-{
-  "source_summary": "2-3 sentence summary",
-  "source_type": "process|architecture|decision|convention|reference|how-to",
-  "key_citation": "Document Title",
-  "interesting_takeaways": "1-2 paragraph narrative of important institutional knowledge. Focus on non-obvious processes, key decisions and rationale, gotchas, things that save time.",
-  "notes": [
-    {
-      "slug": "kebab-case-max-50-chars",
-      "title": "Human Readable Title",
-      "type": "process|architecture|decision|convention|how-to|reference",
-      "summary": "2-4 sentence STANDALONE explanation for a new team member.",
-      "details": "Specific steps, commands, config examples, rationale.",
-      "owner": "Team or person responsible. Null if unknown.",
-      "tags": ["category-tag"]
-    }
-  ]
-}
-```
+| Category | Meaning | Modal | Example |
+|---|---|---|---|
+| `premise` | Assumed true about the environment; not enforced by this system | WILL | "The database WILL enforce foreign key constraints on organizationId" |
+| `invariant` | Always true regardless of operation sequence | SHALL / SHALL NOT | "Every domain model SHALL carry an organizationId foreign key" |
+| `guarantee` | What this system promises to callers and consumers | MUST | "The org-switch MUST reflect the new orgId on all subsequent requests" |
+| `constraint` | Hard limit on valid inputs or state transitions | MUST NOT | "A session MUST NOT be active in more than one organization simultaneously" |
+| `precondition` | Must hold before an operation executes | MUST | "A user MUST have an active Membership before querying org data" |
+| `postcondition` | Must hold after an operation completes | MUST | "After signup, an OWNER Membership MUST exist linking User to Organization" |
 
-**Extraction rules:**
-1. Create 3-15 concepts depending on document richness
-2. Each concept MUST be standalone - understandable without the source
-3. Include specific numbers, percentages, commands when available
-4. Skip generic/obvious information
-5. Slugs become filenames: `{PREFIX}-{slug}.md`
+### Extraction Rules
 
-Store extraction result in `EXTRACTION`.
+1. **Falsifiability gate**: every `statement` must be disprovable by a concrete counterexample. Reject vague prose ("the system should be secure") — rewrite as a specific, measurable claim or discard.
+2. **Active voice, present tense, modal verb**: use MUST / MUST NOT / SHALL / SHALL NOT / WILL per RFC 2119 semantics.
+3. **One claim per statement**: do not bundle compound conditions into one claim.
+4. **Quantity and boundary claims are gold**: "exactly one", "at most N", "within T ms", "never null". Extract these aggressively. Example: "Every domain model MUST carry an `organizationId` foreign key" is stronger than "models should have org context".
+5. **Derive implicit claims**: if the spec says "queries are org-scoped", extract the explicit invariant "Every Prisma read query on a tenant-scoped model MUST include `organizationId: ctx.session.orgId` in the `where` clause."
+6. **Map dependencies**: if CLM-002 only holds because CLM-001 holds (e.g., query filtering depends on every model having `organizationId`), record it in `depends_on`.
+7. Extract 5–25 claims depending on spec richness. Thin specs = fewer, tighter. Dense specs = more, still tight.
+
+Store result in `EXTRACTION`.
+
+---
 
 ## Step 5: Semantic Deduplication
 
-For EACH concept in `EXTRACTION.notes`, do the following:
+For each claim in `EXTRACTION.claims`:
 
-### 5a. Build search query
-
+### 5a. Build query
 ```
-QUERY = "{concept.title} {concept.summary first 200 chars}"
-```
-
-### 5b. Search for similar existing notes
-
-Call MCP tool:
-```
-mcp__qmd__vsearch(
-  query: QUERY,
-  limit: 3,
-  minScore: 0.75
-)
+QUERY = "{claim.title} {claim.statement}"
 ```
 
-### 5c. Process results
-
-**If no results with score >= 0.75:**
-- Mark concept as `CREATE_NEW`
-
-**If result found with score >= 0.75:**
-- Check if result path contains `{FOLDER}/` (same directory)
-- If yes: Mark concept as `MAYBE_MERGE` with `existing_path`
-- If no: Mark concept as `CREATE_NEW`
-
-### 5d. Assess merge (for MAYBE_MERGE concepts)
-
-Read the existing note content using Read tool or `mcp__qmd__get`.
-
-Compare existing content with new concept. Ask yourself:
-- Does new concept provide NEW techniques, numbers, or findings?
-- Does it offer a DIFFERENT perspective or application?
-- Or is it just restating the same thing with different words?
-
-**If genuinely new information exists:**
-- Mark as `MERGE` with `new_info_summary` (2-4 sentences of what's new)
-
-**If no new information:**
-- Mark as `SKIP` with reason
-
-## Step 6: Report Plan (Dry Run stops here)
-
-Print:
+### 5b. Search existing claims
 ```
-Extracted {N} concepts from "{TITLE}":
-
-Will CREATE {X} new notes:
-  - {PREFIX}-{slug}.md: {title}
-  ...
-
-Will MERGE into {Y} existing notes:
-  - {existing_filename}: adds {new_info_summary snippet}
-  ...
-
-Will SKIP {Z} concepts (already covered):
-  - "{concept title}" → {existing_filename} (score: {score})
-  ...
+mcp__qmd__vsearch(query: QUERY, limit: 3, minScore: 0.80)
 ```
 
-**If `--dry-run`:** Stop here. Do not write any files.
+### 5c. Classify
 
-## Step 7: Create Source Index Note
+- **No match ≥ 0.80** → `CREATE_NEW`
+- **Match ≥ 0.80 in `claims/` folder** → read existing; compare:
+  - Statements are *semantically equivalent* → `SKIP`
+  - New claim *strengthens or contradicts* existing → `CONFLICT` (flag for human review)
+  - New claim *adds scope, system, or assertion hint* → `MERGE`
 
-Create file at `{OUTPUT_DIR}/{PREFIX}-{source_slug}.md`:
+> ⚠️ **Contradictions are first-class findings.** If CLM-NEW contradicts an existing claim, do NOT silently merge. Surface it explicitly in the report. Do NOT write the file.
+>
+> Example: existing says "A SUPERADMIN MAY read across orgs"; new spec says "A SUPERADMIN MUST bypass all org filters including writes" — that's a CONFLICT, not a MERGE.
+
+---
+
+## Step 6: Report Plan
+
+```
+Extracted {N} design claims from "{TITLE}" ({SYSTEM}):
+
+CREATE   {X} new claim files
+MERGE    {Y} existing claim files
+CONFLICT {C} contradictions — HUMAN REVIEW REQUIRED
+SKIP     {Z} duplicates
+
+Contradiction details:
+  ⚡ CLM-NEW-008 vs claims/claim-superadmin-access.md
+     New:      "A SUPERADMIN MUST bypass organizationId filtering on all operations"
+     Existing: "A SUPERADMIN MAY read data across all organizations"
+     → Resolve before ingesting.
+```
+
+**If `--dry-run`:** stop here. Do not write any files.
+
+---
+
+## Step 7: Create Source Index File
+
+Create `{OUTPUT_DIR}/{SYSTEM}-claims-index.md`:
 
 ```markdown
 ---
 tags:
-  - source/{MODE}
-  - {source_type}
-source_file: "{original_filename}"
-ingested: {YYYY-MM-DD}
+  - claims/index
+  - system/{SYSTEM}
+created: {YYYY-MM-DD}
+spec_file: "{original_filename}"
 ---
 
-# {key_citation}
+# Design Claims: {SYSTEM}
 
-{source_summary}
+{spec_summary}
 
-## Interesting Takeaways
+## Claim Registry
 
-{interesting_takeaways}
+| ID      | Title     | Category   | File                      |
+|---------|-----------|------------|---------------------------|
+| CLM-001 | {title}   | {category} | [[claims/claim-{slug}]]   |
 
-## Extracted Concepts
+## Dependency Graph
 
-- [[{FOLDER}/{PREFIX}-{concept1_slug}|{concept1_title}]]
-- [[{FOLDER}/{PREFIX}-{concept2_slug}|{concept2_title}]]
-...
+\```
+CLM-002 → CLM-001
+CLM-004 → CLM-001
+CLM-004 → CLM-005
+\```
 
 ## Source
 
-- **File:** `{original_filename}`
-- **Type:** {source_type}
-- **Ingested:** {YYYY-MM-DD}
+- **Spec:** `{original_filename}`
+- **Extracted:** {YYYY-MM-DD}
 ```
 
-## Step 8: Create New Concept Notes
+Omit `## Dependency Graph` if no `depends_on` relationships exist.
 
-For each concept marked `CREATE_NEW`:
+If any `CONFLICT` claims were found, append to the index:
 
-Create file at `{OUTPUT_DIR}/{PREFIX}-{slug}.md`:
+```markdown
+## Unresolved Conflicts
+
+### ⚡ CLM-NEW-{N} vs [[claims/claim-{existing-slug}]]
+
+| | Statement |
+|---|---|
+| **Existing** (`claim-{existing-slug}.md`) | "{existing statement}" |
+| **New** (`{spec_file}`) | "{new statement}" |
+
+**Action required:** {brief description of what differs and what to decide}.
+Re-run `/claims` after resolution.
+```
+
+---
+
+## Step 8: Create New Claim Files
+
+For each `CREATE_NEW` claim, create `{OUTPUT_DIR}/claim-{slug}.md`:
 
 ```markdown
 ---
+id: {id}
 tags:
-  - source/{MODE}
-  - {PREFIX}/{type}
+  - claims/{category}
+  - system/{SYSTEM}
   - {tags...}
-source: "[[{FOLDER}/{PREFIX}-{source_slug}]]"
+category: {category}
+system: {SYSTEM}
+source: "[[claims/{SYSTEM}-claims-index]]"
 added: {YYYY-MM-DD}
 ---
 
 # {title}
 
-{summary}
+> **{statement}**
 
-## Details
+## Rationale
 
-{details}
+{rationale}
 
-## Relevance
+## Violation Scenario
 
-{relevance if not null, otherwise omit this section}
+{violation_scenario}
 
-## Related
+## Assertion Hint
 
-- [[fi-moc]]
+\```pseudo
+{assertion_hint}
+\```
+
+## Dependencies
+
+{depends_on as wikilinks, or "None"}
+
+---
+*Extracted from: {TITLE} — {YYYY-MM-DD}*
+```
 
 ---
 
-*Source: {key_citation}*
-```
+## Step 9: Merge Into Existing Claim Files
 
-For internal mode, add `## Owner` section with `{owner}` if not null.
+For each `MERGE` claim:
 
-## Step 9: Merge Into Existing Notes
+1. Read existing file.
+2. Update frontmatter:
+   - Add `updated: {YYYY-MM-DD}`
+   - If `system:` is a scalar, convert to array and append new system
+   - If `source:` is a scalar, rename to `sources:` array and append new index link
+3. Append section before the final `---` footer:
 
-For each concept marked `MERGE`:
-
-### 9a. Read existing note
-
-Use Read tool to get current content.
-
-### 9b. Update YAML frontmatter
-
-If note has `source: "..."`:
-- Convert to `sources:` array
-- Add new source link
-
-If note has `sources:` array:
-- Append new source link
-
-Add or update `updated: {YYYY-MM-DD}`
-
-### 9c. Append new information
-
-Find or create `## Additional Sources` section.
-
-Add:
 ```markdown
-**From {key_citation}:**
-{new_info_summary}
+## Additional Context ({SYSTEM}, {YYYY-MM-DD})
+
+{new assertion hint, scope extension, or implementation detail}
+
+*Source: {TITLE}*
 ```
 
-### 9d. Write updated note
+4. Write file.
 
-Use Write tool to save changes.
+---
 
-## Step 10: Report Results
+## Step 10: Final Report
 
-Print:
 ```
-=== Ingestion Complete ({MODE} mode) ===
+=== Claims Extraction Complete ({SYSTEM}) ===
 
-Source note: {PREFIX}-{source_slug}.md
+Index:     {SYSTEM}-claims-index.md
+Created:   {X} claim files
+Merged:    {Y} claim files
+Conflicts: {C} (see index — unresolved, files NOT written)
+Skipped:   {Z} duplicates
 
-Created {X} concept notes:
-  ✓ {PREFIX}-{slug1}.md
-  ✓ {PREFIX}-{slug2}.md
-  ...
+⚡ UNRESOLVED CONFLICTS — action required:
+  {list each conflict with both statements}
 
-Merged into {Y} existing notes:
-  ✓ {existing1}.md (added: {snippet})
-  ...
-
-Skipped {Z} concepts (already covered)
-
-📌 Key Takeaways:
+📋 Full Claim Registry:
 ────────────────────────────────────────
-{interesting_takeaways}
+{ID} [{category}] {statement}
+...
 ────────────────────────────────────────
 ```
 
@@ -317,65 +306,99 @@ If `mcp__qmd__vsearch` is not available or returns an error:
 
 1. Fall back to filename matching:
    ```bash
-   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from concept title}"
+   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from claim title}"
    ```
-
-2. If similar filename found, read it and do manual comparison
-3. Otherwise, create new note
-
-This provides basic deduplication even without semantic search.
+2. If similar filename found, read it and do manual comparison.
+3. Otherwise, create new file.
 
 ---
 
 ## Example Session
 
+**User input:**
 ```
-User: /ingest ~/Downloads/attention-paper.pdf
+/claims ~/docs/Multitenancy.md --system blitz-multitenancy
+```
 
-Claude:
+**Output:**
+```
 Reading config... vault at ~/Documents/notes
-Extracting text from PDF... 45,231 characters
 
-Analyzing document...
+Reading spec...
+Document: Multitenancy.md, ~1,800 words
 
-Extracted 5 concepts from "Attention Is All You Need":
+Analyzing and extracting design claims...
 
-Checking for duplicates...
-  "self-attention" → searching... no similar notes (create new)
-  "multi-head-attention" → searching... no similar notes (create new)
-  "positional-encoding" → searching... found lit-position-embeddings.md (0.81)
-    → Reading existing note...
-    → New info: sinusoidal functions vs learned embeddings
+Extracted 8 claims from "Multitenancy.md" (blitz-multitenancy):
+
+1. organizationid-on-every-model        (invariant)
+2. query-must-filter-by-orgid           (invariant)
+3. create-must-attach-orgid             (postcondition)
+4. update-delete-where-includes-orgid   (invariant)
+5. session-scoped-to-one-org            (constraint)
+6. entity-assigned-to-membership        (constraint)
+7. signup-creates-org-and-membership    (postcondition)
+8. superadmin-bypasses-org-filter       (guarantee)
+
+Checking for semantic duplicates...
+  ✓ organizationid-on-every-model       → no similar claims
+  ✓ query-must-filter-by-orgid          → no similar claims
+  ✓ create-must-attach-orgid            → no similar claims
+  ✓ update-delete-where-includes-orgid  → no similar claims
+  ✓ session-scoped-to-one-org           → found: claim-session-single-context.md (0.82)
+    → New info: orgId in Blitz PublicData; $setPublicData switch mechanism
     → Will merge
-  "transformer-architecture" → searching... no similar notes (create new)
-  "training-efficiency" → searching... found lit-gpu-training.md (0.79)
-    → Reading existing note...
-    → No new information (already covers training speedups)
-    → Skipping
+  ✓ entity-assigned-to-membership       → no similar claims
+  ✓ signup-creates-org-and-membership   → no similar claims
+  ✗ superadmin-bypasses-org-filter      → found: claim-superadmin-access.md (0.93)
+    → CONFLICT: existing says MAY read across orgs;
+                new spec says MUST bypass filter on ALL operations
+    → Flagged — file NOT written
 
-Creating notes...
+Creating files...
 
-=== Ingestion Complete (literature mode) ===
+Created index:
+  claims/blitz-multitenancy-claims-index.md
 
-Source note: lit-attention-is-all-you-need.md
+Created 6 claim files:
+  ✓ claims/claim-organizationid-on-every-model.md
+  ✓ claims/claim-query-must-filter-by-orgid.md
+  ✓ claims/claim-create-must-attach-orgid.md
+  ✓ claims/claim-update-delete-where-includes-orgid.md
+  ✓ claims/claim-entity-assigned-to-membership.md
+  ✓ claims/claim-signup-creates-org-and-membership.md
 
-Created 4 concept notes:
-  ✓ lit-self-attention.md
-  ✓ lit-multi-head-attention.md
-  ✓ lit-transformer-architecture.md
-  ✓ lit-scaled-dot-product.md
+Merged into existing:
+  ✓ claims/claim-session-single-context.md
+    Added: orgId in Blitz PublicData; $setPublicData switch; dual-role array shape
 
-Merged into 1 existing note:
-  ✓ lit-position-embeddings.md (added: sinusoidal encoding approach)
+Skipped (conflict — not written):
+  ✗ superadmin-bypasses-org-filter → claim-superadmin-access.md
+    Reason: MAY (read-only) vs MUST (all operations) contradicts existing claim
 
-Skipped 1 concept (already covered):
-  - "training-efficiency" → lit-gpu-training.md
+=== Claims Extraction Complete (blitz-multitenancy) ===
 
-📌 Key Takeaways:
+Index:     blitz-multitenancy-claims-index.md
+Created:   6 claim files
+Merged:    1 claim file
+Conflicts: 1 (see index — unresolved, file NOT written)
+Skipped:   0
+
+⚡ UNRESOLVED CONFLICTS — action required:
+  claim-superadmin-access.md vs CLM-NEW-008
+    Existing: "A SUPERADMIN MAY read data across all organizations"
+    New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
+    → Read-only vs all-operations is a security boundary decision.
+      Confirm with the platform team; update the winning file's modal verb.
+
+📋 Full Claim Registry:
 ────────────────────────────────────────
-The most surprising finding is how much simpler the Transformer is
-compared to previous seq2seq models. By removing recurrence entirely,
-they achieved 10x speedup in training. The attention visualizations
-show the model learning grammatical structure without explicit teaching.
+CLM-001 [invariant]     Every domain model except User and Organization MUST carry an organizationId foreign key.
+CLM-002 [invariant]     Every Prisma read query on a tenant-scoped model MUST include organizationId: ctx.session.orgId in the where clause.
+CLM-003 [postcondition] On create, every tenant-scoped record MUST have organizationId set to ctx.session.orgId.
+CLM-004 [invariant]     Update and delete mutations MUST include organizationId: ctx.session.orgId in the Prisma where clause.
+CLM-005 [constraint]    A session MUST NOT be active in more than one organization simultaneously.
+CLM-006 [constraint]    Entities with per-person assignment semantics MUST use membershipId, NOT userId, as the owner foreign key.
+CLM-007 [postcondition] A successful signup MUST atomically produce a User, an Organization, and an OWNER Membership.
 ────────────────────────────────────────
 ```
