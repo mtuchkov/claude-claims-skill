@@ -1,6 +1,6 @@
 {
-  "name": "ingest",
-  "version": "1.1.0",
+  "name": "claims",
+  "version": "1.2.0",
   "description": "Ingest specs, ADRs, and post-mortems into atomic, falsifiable design claims with semantic deduplication and conflict detection.",
   "author": "mtuchkov",
   "homepage": "https://github.com/mtuchkov/claude-claims-skill",
@@ -20,8 +20,8 @@
   ],
   "skills": [
     {
-      "file": "plugins/ingest/skills/ingest/SKILL.md",
-      "name": "ingest"
+      "file": "plugins/claims/skills/claims/SKILL.md",
+      "name": "claims"
     }
   ],
   "requirements": {
