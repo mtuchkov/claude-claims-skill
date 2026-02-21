@@ -1,22 +1,22 @@
 {
-  "name": "claude-ingest-skill",
+  "name": "claude-claims-skill",
   "owner": {
-    "name": "crimeacs"
+    "name": "mtuchkov"
   },
   "metadata": {
-    "description": "Document ingestion skill for knowledge vaults",
+    "description": "Specifications ingestion skill for extracting basic premises, guarantees, and invariants",
     "version": "1.0.0"
   },
   "plugins": [
     {
-      "name": "ingest",
-      "source": "./plugins/ingest",
-      "description": "Ingest PDFs, DOCX, and URLs into atomic knowledge notes with semantic deduplication",
+      "name": "claims",
+      "source": "./plugins/claims",
+      "description": "Ingest PDFs, DOCX, MD, and URLs into atomic claims with semantic deduplication",
       "version": "1.0.0",
       "author": {
-        "name": "crimeacs"
+        "name": "mtuchkov"
       },
-      "keywords": ["knowledge-management", "obsidian", "zettelkasten", "pdf", "research"],
+      "keywords": ["knowledge-management", "obsidian", "system-specification", "markdown", "system-design", "design-claims"],
       "category": "productivity"
     }
   ]
