@@ -2,7 +2,7 @@
   "name": "ingest",
   "version": "1.1.0",
   "description": "Ingest specs, ADRs, and post-mortems into atomic, falsifiable design claims with semantic deduplication and conflict detection.",
-  "author": "crimeacs",
+  "author": "mtuchkov",
   "homepage": "https://github.com/mtuchkov/claude-claims-skill",
   "repository": {
     "type": "git",
