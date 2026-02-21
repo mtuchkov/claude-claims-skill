@@ -1,123 +1,145 @@
-# claude-ingest-skill
+# claude-claims-skill
 
-A Claude Code skill that transforms documents into **atomic, interconnected concept notes** with semantic deduplication.
+A Claude Code skill that transforms specs, ADRs, and post-mortems into **atomic, falsifiable design claims** with semantic deduplication and conflict detection.
 
 ## What Makes This Different
 
-Unlike simple summarizers that create one page per document, this skill:
+Unlike doc summarizers or comment generators, this skill extracts the *contractual skeleton* of your design documents — the premises, invariants, guarantees, and constraints that must hold for the system to be correct.
 
-| Traditional Summarizer | This Skill |
-|----------------------|------------|
-| 1 summary file per document | 5-15 separate concept files |
-| Concepts as bullet points | Each concept is standalone note |
-| No deduplication | Semantic search finds similar notes |
-| Content isolated per source | Concepts accumulate across sources |
+| Generic Summarizer | This Skill |
+|---|---|
+| 1 summary file per document | 5–25 separate claim files |
+| Claims buried in prose | Each claim is standalone and falsifiable |
+| No deduplication | Semantic search finds overlapping claims |
+| Silent on contradictions | Flags conflicting claims across specs |
+| Content isolated per source | Claims accumulate and strengthen across specs |
 
-**Result:** A growing knowledge graph where each concept links to others and gets richer as you add sources.
+**Result:** A growing oracle set where every claim is directly traceable to a spec, linked to dependent claims, and equipped with assertion hints ready for test generation or AI reasoning.
 
 ## Installation
 
 ### Claude Code (recommended)
 
 ```
-/plugin marketplace add crimeacs/claude-ingest-skill
-/plugin install ingest@crimeacs-claude-ingest-skill
+/plugin marketplace add crimeacs/claude-claims-skill
+/plugin install claims@crimeacs-claude-claims-skill
 ```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/crimeacs/claude-ingest-skill.git ~/.claude/skills/ingest
+git clone https://github.com/crimeacs/claude-claims-skill.git ~/.claude/skills/claims
 ```
 
 ## Usage
 
 ```
-/ingest ~/Downloads/attention-paper.pdf
-/ingest https://example.com/api-docs --internal
-/ingest spec.docx --title "API Specification v2"
-/ingest paper.pdf --dry-run
+/claims ~/docs/Multitenancy.md --system blitz-multitenancy
+/claims ~/docs/auth-adr-007.md --system auth
+/claims https://wiki.internal/post-mortem-42 --system payments
+/claims design-doc.md --system order-api --dry-run
 ```
 
 ### Arguments
 
 | Argument | Description |
-|----------|-------------|
-| `[file-or-url]` | Path to document (.pdf, .docx, .md, .txt) or URL |
-| `--internal` | Create internal notes instead of literature notes |
-| `--title "..."` | Override the document title |
+|---|---|
+| `[file-or-url]` | Path to spec, ADR, post-mortem (.md, .pdf, .docx, .txt) or URL |
+| `--system <n>` | Logical system name (e.g., `blitz-multitenancy`, `auth`). Defaults to filename stem. |
 | `--dry-run` | Preview extraction without writing files |
 
 ## How It Works
 
-### 1. Extract Atomic Concepts
+### 1. Extract Falsifiable Claims
 
-The skill analyzes your document and extracts 3-15 standalone concepts:
+The skill analyzes your document and extracts 5–25 standalone claims, each assigned a category:
 
 ```
-Input: attention-is-all-you-need.pdf
+Input: Multitenancy.md
 
-Extracted concepts:
-- self-attention (technique)
-- multi-head-attention (technique)
-- positional-encoding (technique)
-- transformer-architecture (finding)
-- scaled-dot-product-attention (technique)
+Extracted claims:
+- organizationid-on-every-model        (invariant)
+- query-must-filter-by-orgid           (invariant)
+- create-must-attach-orgid             (postcondition)
+- update-delete-where-includes-orgid   (invariant)
+- session-scoped-to-one-org            (constraint)
+- entity-assigned-to-membership        (constraint)
+- signup-creates-org-and-membership    (postcondition)
 ```
+
+Every statement uses RFC 2119 modal verbs (MUST / SHALL / WILL) and must be disprovable by a concrete counterexample. Vague prose like "queries should be tenant-scoped" is rewritten into something precise and testable — or discarded.
 
 ### 2. Semantic Deduplication
 
-Before creating each note, the skill searches your vault for similar existing concepts:
+Before creating each file, the skill searches your vault for similar existing claims:
 
 ```
 Checking for duplicates...
-✓ self-attention → no similar notes
-✓ positional-encoding → found: lit-position-embeddings.md (similarity: 0.78)
-  → New info detected: sinusoidal vs learned embeddings
-  → Will merge into existing note
+✓ organizationid-on-every-model  → no similar claims
+✓ session-scoped-to-one-org      → found: claim-session-single-context.md (0.82)
+  → New info: orgId in Blitz PublicData; $setPublicData switch mechanism
+  → Will merge
+✗ superadmin-bypasses-org-filter → found: claim-superadmin-access.md (0.93)
+  → CONFLICT: existing says MAY read across orgs;
+              new spec says MUST bypass filter on ALL operations
+  → Flagged — NOT written
 ```
 
-### 3. Create or Merge
+### 3. Create, Merge, or Flag
 
-**New concepts** get their own files:
+**New claims** get their own files:
 ```
-Created: literature/lit-self-attention.md
-Created: literature/lit-multi-head-attention.md
-```
-
-**Overlapping concepts** merge into existing notes:
-```
-Merged into: literature/lit-position-embeddings.md
-  Added: sinusoidal encoding approach from Vaswani et al.
+Created: claims/claim-organizationid-on-every-model.md
+Created: claims/claim-query-must-filter-by-orgid.md
 ```
 
-### 4. Source Index
+**Overlapping claims** with new information merge into existing files:
+```
+Merged into: claims/claim-session-single-context.md
+  Added: orgId in Blitz PublicData; $setPublicData switch; dual-role array shape
+```
 
-A source note links to all extracted concepts:
+**Contradicting claims** are flagged and blocked — never silently merged:
+```
+⚡ CONFLICT: claim-superadmin-access.md vs CLM-NEW-008
+   Existing: "A SUPERADMIN MAY read data across all organizations"
+   New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
+   → File NOT written. Resolve before re-running.
+```
+
+### 4. Claims Index
+
+An index file links every extracted claim and renders the dependency graph:
 
 ```markdown
-# Attention Is All You Need
+# Design Claims: blitz-multitenancy
 
-## Extracted Concepts
+| ID      | Title                                  | Category      | File                          |
+|---------|----------------------------------------|---------------|-------------------------------|
+| CLM-001 | organizationId on Every Domain Model   | invariant     | [[claim-organizationid-...]]  |
+| CLM-002 | Queries Must Filter by organizationId  | invariant     | [[claim-query-...]]           |
+| CLM-007 | Signup Atomically Creates Org + Member | postcondition | [[claim-signup-...]]          |
 
-- [[lit-self-attention]] - Self-Attention Mechanism
-- [[lit-multi-head-attention]] - Multi-Head Attention
-- [[lit-transformer-architecture]] - Transformer Architecture
+## Dependency Graph
+
+CLM-002 → CLM-001
+CLM-003 → CLM-001
+CLM-006 → CLM-001
 ```
 
 ## Output Structure
 
 ```
 vault/
-├── literature/
-│   ├── lit-attention-is-all-you-need.md  ← Source index
-│   ├── lit-self-attention.md              ← Concept note
-│   ├── lit-multi-head-attention.md        ← Concept note
-│   └── lit-position-embeddings.md         ← Merged with new source
-└── internal/
-    ├── int-deploy-process.md              ← Source index
-    ├── int-canary-deployment.md           ← Concept note
-    └── int-rollback-procedure.md          ← Concept note
+└── claims/
+    ├── blitz-multitenancy-claims-index.md          ← Registry + dependency graph
+    ├── claim-organizationid-on-every-model.md
+    ├── claim-query-must-filter-by-orgid.md
+    ├── claim-create-must-attach-orgid.md
+    ├── claim-update-delete-where-includes-orgid.md
+    ├── claim-entity-assigned-to-membership.md
+    ├── claim-signup-creates-org-and-membership.md
+    └── claim-session-single-context.md              ← Merged: auth-service + blitz-multitenancy
 ```
 
 ## Prerequisites
@@ -136,12 +158,12 @@ Install [qmd](https://github.com/tobi/qmd) and index your vault:
 
 ```bash
 # Install qmd
-brew install qmd  # or your package manager
+brew install qmd
 
 # Index your vault
 cd ~/Documents/my-vault
 qmd index
-qmd embed  # For vector search
+qmd embed  # enables vector search
 ```
 
 Without qmd, the skill falls back to filename matching for deduplication.
@@ -156,90 +178,121 @@ brew install poppler pandoc
 apt install poppler-utils pandoc
 ```
 
-## Concept Note Format
+## Claim File Format
 
-Each concept is a standalone note:
+Each claim is a standalone falsifiable statement with rationale, a violation scenario, and assertion hints:
 
 ```markdown
 ---
+id: CLM-002
 tags:
-  - source/literature
-  - lit/technique
-  - machine-learning
-source: "[[literature/lit-attention-paper]]"
-added: 2024-01-15
+  - claims/invariant
+  - system/blitz-multitenancy
+  - security
+  - prisma
+category: invariant
+system: blitz-multitenancy
+source: "[[claims/blitz-multitenancy-claims-index]]"
+added: 2026-02-20
 ---
 
-# Self-Attention Mechanism
+# Queries Must Filter by organizationId
 
-Self-attention computes representations by relating different positions
-within the same sequence. Each position attends to all positions,
-capturing dependencies regardless of distance.
+> **Every Prisma read query on a tenant-scoped model MUST include
+> `organizationId: ctx.session.orgId` in the `where` clause.**
 
-## Details
+## Rationale
 
-The mechanism uses Query, Key, Value vectors...
+A shared-database multitenant system has no network or schema barrier between
+tenants. The `organizationId` filter is the sole runtime enforcement mechanism —
+omitting it on a single query is a data-leak vulnerability.
 
-## Related
+## Violation Scenario
 
-- [[lit-multi-head-attention]]
-- [[lit-transformer-architecture]]
+GET /projects?id=42 runs `db.project.findFirst({ where: { id: 42 } })`.
+User in Org A submits id=42, which belongs to Org B. The query returns Org B's
+data. No error fires because the record exists and the user is authenticated.
 
----
+## Assertion Hint
 
-*Source: Vaswani et al. (2017)*
+```pseudo
+// AST lint — every db read must have organizationId in where
+for each db.*.findFirst / findMany / findUnique call:
+  assert: where clause contains "organizationId"
+
+// Integration test
+login as user_a (orgId = 1)
+seed: project { id: 99, organizationId: 2 }
+GET /projects/99 as user_a → expect 404 or 403, NOT 200
 ```
+
+## Dependencies
+
+[[claims/claim-organizationid-on-every-model]] (CLM-001)
+```
+
+## Claim Categories
+
+| Category | Meaning | Example |
+|---|---|---|
+| `premise` | Assumed true about the environment; not enforced by this system | "The database WILL enforce foreign key constraints on organizationId" |
+| `invariant` | Always true regardless of operation sequence | "Every domain model SHALL carry an organizationId foreign key" |
+| `guarantee` | What this system promises to callers | "The org-switch MUST reflect the new orgId on all subsequent requests" |
+| `constraint` | Hard limit on valid inputs or state transitions | "A session MUST NOT be active in more than one organization simultaneously" |
+| `precondition` | Must hold before an operation executes | "A user MUST have an active Membership before querying org data" |
+| `postcondition` | Must hold after an operation completes | "After signup, an OWNER Membership MUST exist linking User to Organization" |
 
 ## Multi-Source Accumulation
 
-When you ingest another paper covering the same concept, it merges:
+When the same claim appears in multiple specs, new context is appended without overwriting the original:
 
 ```markdown
 ---
+id: CLM-005
+system:
+  - auth-service        ← original
+  - blitz-multitenancy  ← added on merge
 sources:
-  - "[[literature/lit-attention-paper]]"
-  - "[[literature/lit-bert-paper]]"     ← Added
-updated: 2024-01-20                      ← Updated
+  - "[[claims/auth-service-claims-index]]"
+  - "[[claims/blitz-multitenancy-claims-index]]"
+updated: 2026-02-20
 ---
 
-# Self-Attention Mechanism
+# Session Scoped to One Org at a Time
 
-{Original content}
+> **A user session MUST be active in exactly one organization at a time.**
 
-## Additional Sources
+{Original content from auth-service spec}
 
-**From BERT Paper (Devlin 2018):**
-Adds bidirectional context—attends to both left and right tokens.
-Pre-training with masked language modeling improves downstream tasks.
+## Additional Context (blitz-multitenancy, 2026-02-20)
+
+In Blitz.js, orgId lives in Session.PublicData. Switching is performed via
+session.$setPublicData({ orgId }). Both GlobalRole and MembershipRole values
+coexist in the roles array simultaneously.
+
+*Source: Multitenancy.md*
 ```
 
-## Modes
+## What to Feed It
 
-### Literature Mode (default)
+The skill works on any document that makes design decisions:
 
-For external research: papers, articles, documentation.
-
-- Creates `lit-*` files in `literature/`
-- Extracts: findings, techniques, definitions, benchmarks
-- Includes citation metadata
-
-### Internal Mode (`--internal`)
-
-For team documentation: processes, architecture, decisions.
-
-- Creates `int-*` files in `internal/`
-- Extracts: processes, architecture, decisions, conventions
-- Includes owner/team metadata
+- **Specs** — functional requirements, API contracts, data model definitions
+- **ADRs** — Architecture Decision Records; the *consequences* section is especially claim-rich
+- **Post-mortems** — contributing factors become premises; corrective actions become invariants or guarantees
+- **RFCs** — interface contracts, SLA definitions, error-handling policies
+- **Runbooks** — operational constraints and preconditions for procedures
 
 ## Tips
 
-- Use `--dry-run` first to preview extraction
-- Review merged notes for quality
-- Add manual annotations after ingestion
-- For batch processing, use [claude-note CLI](https://github.com/crimeacs/claude-note)
+- Run `--dry-run` first to preview extraction and spot conflicts before writing
+- Feed ADRs in chronological order — a later ADR superseding an earlier one surfaces as a conflict to resolve deliberately, not silently
+- After ingestion, sort the dependency graph topologically; foundational claims (no `depends_on`) are where your test suite should fail fast
+- Treat every `premise` claim as a monitoring gap: if it's never checked in production, you're flying blind on an assumption your entire system depends on
 
 ## Related Projects
 
+- [claude-ingest](https://github.com/crimeacs/claude-ingest-skill) - Sister skill for ingesting literature and internal docs into concept notes
 - [claude-note](https://github.com/crimeacs/claude-note) - Full knowledge synthesis daemon
 - [qmd](https://github.com/tobi/qmd) - Quick Markdown Search for semantic deduplication
 - [Obsidian](https://obsidian.md) - Knowledge base for local Markdown files
