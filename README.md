@@ -21,14 +21,14 @@ Unlike doc summarizers or comment generators, this skill extracts the *contractu
 ### Claude Code (recommended)
 
 ```
-/plugin marketplace add crimeacs/claude-claims-skill
-/plugin install claims@crimeacs-claude-claims-skill
+/plugin marketplace add mtuchkov/claude-claims-skill
+/plugin install claims@mtuchkov-claude-claims-skill
 ```
 
 ### Manual Installation
 
 ```bash
-git clone https://github.com/crimeacs/claude-claims-skill.git ~/.claude/skills/claims
+git clone https://github.com/mtuchkov/claude-claims-skill.git ~/.claude/skills/claims
 ```
 
 ## Usage
