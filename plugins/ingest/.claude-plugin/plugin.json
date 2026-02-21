@@ -1,12 +1,12 @@
 {
   "name": "ingest",
   "version": "1.1.0",
-  "description": "Ingest documents into atomic knowledge notes with semantic deduplication",
+  "description": "Ingest specs, ADRs, and post-mortems into atomic, falsifiable design claims with semantic deduplication and conflict detection.",
   "author": {
-    "name": "crimeacs"
+    "name": "mtuchkov"
   },
-  "homepage": "https://github.com/crimeacs/claude-ingest-skill",
-  "repository": "https://github.com/crimeacs/claude-ingest-skill",
+  "homepage": "https://github.com/mtuchkov/claude-claims-skill",
+  "repository": "https://github.com/mtuchkov/claude-claims-skill",
   "license": "MIT",
-  "keywords": ["knowledge-management", "obsidian", "zettelkasten", "note-taking", "pdf", "research"]
+  "keywords": ["knowledge-management", "system-specification", "design", "markdown", "system-design"]
 }
