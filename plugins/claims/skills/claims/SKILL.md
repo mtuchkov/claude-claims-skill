@@ -1,13 +1,17 @@
 ---
 name: claims
-description: Extract falsifiable design claims from a project spec — premises, invariants, guarantees, and constraints — structured for AI reasoning, assertion generation, and test scaffolding.
+description: Build a constraint graph from a spec or codebase — extracting, normalizing, deriving, scoping, deduplicating, typing, conflict-checking, and composing constraints into top-level invariants. No implied constraints. Only explicit semantics from the source.
 argument-hint: [file-or-url] [--system <n>] [--dry-run]
 allowed-tools: Read, Write, Bash, WebFetch, mcp__qmd__vsearch, mcp__qmd__get
 ---
 
-# Design Claims Extraction Skill
+# Constraint Graph Skill
 
-When invoked with `/claims`, follow these steps EXACTLY.
+When invoked with `/claims`, follow these phases EXACTLY and in order.
+Do not skip phases.
+Every node and edge must be traceable to a literal token in the spec or code.
+
+---
 
 ## Step 1: Parse Arguments
 
@@ -15,13 +19,12 @@ When invoked with `/claims`, follow these steps EXACTLY.
 /claims <file-or-url> [--system <n>] [--dry-run]
 ```
 
-- `file-or-url`: Required. Path to spec file or URL.
-- `--system <n>`: Logical system name (e.g., "blitz-multitenancy"). Defaults to filename stem.
-- `--dry-run`: Preview extracted claims; do not write files.
+- `file-or-url`: Required. Path to spec file, code file, or URL.
+- `--system <n>`: Logical system name (e.g., "payment-service"). Defaults to filename stem.
+- `--dry-run`: Preview extracted nodes; do not write files.
 
 Set variables:
 - `SYSTEM` = value of `--system`, or filename stem
-- `PREFIX`  = "claim"
 - `FOLDER`  = "claims"
 
 ---
@@ -34,11 +37,11 @@ cat ~/.config/claude-note/config.toml 2>/dev/null
 
 Extract `vault_root`. Set `OUTPUT_DIR` = `{vault_root}/claims/`.
 
-If no config, ask: "Where should I create claim files? (e.g., ~/Documents/notes)"
+If no config, ask: "Where should I create constraint graph files? (e.g., ~/Documents/notes)"
 
 ---
 
-## Step 3: Read Spec Content
+## Step 3: Read Source Content
 
 Set `TITLE` from `--system` or filename.
 
@@ -46,6 +49,7 @@ Set `TITLE` from `--system` or filename.
 - `.md` or `.txt`: Use Read tool directly
 - `.pdf`: Run `pdftotext "{file}" - 2>/dev/null || pandoc "{file}" -t plain`
 - `.docx`: Run `pandoc "{file}" -t plain --wrap=none`
+- `.java`, `.ts`, `.py`, or any code file: Read directly; treat structure as normative
 
 **For URLs:** Use WebFetch to get the content.
 
@@ -53,103 +57,766 @@ Store in `CONTENT`. If longer than 100,000 characters, truncate and append `\n\n
 
 ---
 
-## Step 4: Extract Design Claims
+## Step 4: Apply Controlled Vocabulary
 
-Analyze `CONTENT` and extract this JSON structure:
+Before extraction, internalize the full controlled vocabulary.
+Every word in a normalized statement MUST map to one of the tiers below,
+or be a domain term preserved verbatim from the source.
+
+### Tier 1 — Modal Operators (RFC 2119)
+
+| Token | Meaning |
+|---|---|
+| MUST | Absolute requirement, no exceptions |
+| MUST NOT | Absolute prohibition |
+| SHOULD | Strong recommendation, exceptions acknowledged |
+| SHOULD NOT | Strong discouragement |
+| MAY | Permitted but not required |
+
+### Tier 2 — Relationship Verbs
+
+| Token | Meaning |
+|---|---|
+| requires | A cannot exist or execute without B |
+| produces | A creates or emits B |
+| consumes | A takes B as input and transforms it |
+| contains | A holds B as a member |
+| references | A points to B without ownership |
+| extends | A inherits all constraints of B and adds more |
+| excludes | A and B cannot coexist in the same scope |
+| precedes | A must complete before B begins |
+| triggers | A causes B to initiate |
+| satisfies | A fulfills the condition stated by B |
+| violates | A breaks the condition stated by B |
+
+### Tier 3 — Verification Verbs
+
+| Token | Meaning |
+|---|---|
+| holds | A condition is true at a given point in time |
+| preserves | An operation leaves a condition unchanged |
+| establishes | An operation makes a condition true for the first time |
+| invalidates | An operation makes a previously true condition false |
+| guarantees | A component commits to a condition unconditionally |
+| assumes | A component requires a condition without verifying it |
+| asserts | A component checks a condition and halts if false |
+| implies | If A holds, B must also hold |
+| is invariant under | A condition holds regardless of which operation is applied |
+
+### Tier 4 — Distributed Systems Verbs
+
+| Token | Meaning |
+|---|---|
+| propagates | A change flows from one node to others |
+| converges | A system reaches a consistent state over time |
+| replicates | A copy of B is maintained at another location |
+| partitions | A group splits into subgroups that cannot communicate |
+| coordinates | Multiple parties synchronize to reach a shared decision |
+| acknowledges | A receiver confirms receipt to the sender |
+| retries | An operation is repeated after a failure |
+| times out | An operation is abandoned after a bounded wait |
+| linearizes | Operations appear to execute in a single global order |
+| serializes | Operations are forced into a strict sequential order |
+
+### Tier 5 — Collection and Structure Nouns
+
+| Token | Meaning |
+|---|---|
+| set | Unordered collection, no duplicates |
+| multiset | Unordered collection, duplicates allowed |
+| sequence | Ordered collection, duplicates allowed |
+| queue | Ordered collection, FIFO access |
+| map | Key-value pairs, unique keys |
+| graph | Nodes connected by edges |
+| tree | Acyclic graph with a single root |
+| stream | Unbounded sequence arriving over time |
+| partition | Non-overlapping subsets covering the full set |
+| quorum | A subset sufficient to make a decision |
+| epoch | A bounded period with a consistent configuration |
+| snapshot | A consistent point-in-time capture of state |
+| replica | A copy maintained for availability or locality |
+| shard | A horizontal subset of a dataset |
+| boundary | The limit defining where a constraint applies |
+
+### Tier 6 — Adjectives
+
+| Token | Meaning |
+|---|---|
+| bounded | Has a finite, defined upper limit |
+| unbounded | Has no defined upper limit |
+| atomic | Executes as a single indivisible unit |
+| idempotent | Applying N times produces the same result as applying once |
+| deterministic | Same input always produces same output |
+| monotonic | Value only moves in one direction over time |
+| consistent | All observers see the same state at the same logical time |
+| eventual | A property holds after an unspecified but finite time |
+| strict | No exceptions permitted |
+| partial | Applies to a subset, not the whole |
+| total | Applies to every member of the set |
+| exclusive | Only one member may hold this at a time |
+| shared | Multiple members may hold this simultaneously |
+| durable | Survives failures and restarts |
+| volatile | Lost on failure or restart |
+| ordered | Elements have a defined sequence |
+| unordered | Elements have no defined sequence |
+
+### Tier 7 — Adverbs
+
+**Temporal:**
+| Token | Meaning |
+|---|---|
+| immediately | Before any other operation in the same scope |
+| eventually | After an unspecified but finite number of steps |
+| never | Under no circumstances, at no point in time |
+| always | At every point in time, without exception |
+| once | Exactly one time across the lifetime of the system |
+| initially | At system or component startup only |
+| finally | At the last step of a sequence or lifecycle |
+| concurrently | Simultaneously with another operation |
+| sequentially | Strictly one after another, no overlap |
+
+**Frequency:**
+| Token | Meaning |
+|---|---|
+| exactly N times | Neither more nor less than N occurrences |
+| at most N times | Upper bound, zero is permitted |
+| at least N times | Lower bound, no upper bound unless stated |
+| periodically | At regular bounded intervals |
+| on demand | Only when explicitly triggered |
+
+**Degree:**
+| Token | Meaning |
+|---|---|
+| strictly | No relaxation permitted under any condition |
+| partially | Applies to a defined subset |
+| globally | Across all nodes, partitions, or scopes |
+| locally | Within a single node, partition, or scope only |
+| transitively | Applies through the full chain of references |
+| directly | Applies only to the immediate relationship |
+
+**Certainty:**
+| Token | Meaning |
+|---|---|
+| necessarily | Cannot be otherwise given the premises |
+| possibly | Permitted but not guaranteed |
+| conditionally | True only when a stated predicate holds |
+| unconditionally | True regardless of any other state |
+
+**Banned adverbs — reject at normalization gate:**
+
+| Banned | Replace With |
+|---|---|
+| quickly | within N milliseconds |
+| soon | eventually / within N seconds |
+| usually | at least N% of the time |
+| often | at least N times per period |
+| rarely | at most N times per period |
+| typically | SHOULD / conditionally |
+
+### Tier 8 — Generalization and Domain Nouns
+
+**Entities:**
+| Token | Meaning |
+|---|---|
+| entity | A distinct object with a unique, persistent identity |
+| aggregate | A cluster of entities treated as a single unit with one root |
+| value object | An immutable descriptor with no independent identity |
+| reference | A pointer to an entity without ownership |
+| identifier | A value that uniquely distinguishes one entity from all others |
+| version | A labeled snapshot of an entity at a point in time |
+| lifecycle | The bounded set of states an entity may pass through |
+| owner | The entity that holds exclusive write authority over another |
+
+**Messages:**
+| Token | Meaning |
+|---|---|
+| message | A discrete unit of communication between two parties |
+| command | A message that requests a state change |
+| event | A message that records a state change that already occurred |
+| query | A message that requests information without side effects |
+| request | A message expecting a response |
+| response | A message sent in reply to a request |
+| notification | A one-way message expecting no reply |
+| acknowledgment | A message confirming receipt or processing |
+| signal | A lightweight message carrying intent but no payload |
+| payload | The data carried inside a message |
+| envelope | The metadata wrapping a payload |
+| correlation identifier | A value linking a request to its response across time |
+
+**Data Contracts:**
+| Token | Meaning |
+|---|---|
+| schema | A formal definition of the structure of a data artifact |
+| contract | A mutual agreement on shape, behavior, and obligations |
+| invariant | A condition that MUST hold at all times within a defined scope |
+| precondition | A condition that MUST hold before an operation executes |
+| postcondition | A condition that MUST hold after an operation completes |
+| constraint | A restriction on valid states or transitions |
+| assertion | A condition checked at runtime that halts if violated |
+| guarantee | A condition a producer commits to unconditionally |
+| assumption | A condition a consumer depends on without verifying |
+| obligation | A condition one party MUST fulfill toward another |
+| violation | A state in which a constraint no longer holds |
+| compatibility | The degree to which one version of a contract satisfies another |
+
+**Interfaces:**
+| Token | Meaning |
+|---|---|
+| interface | A named boundary defining what operations a component exposes |
+| operation | A named action exposed through an interface |
+| endpoint | A network-addressable location where an interface is reachable |
+| protocol | A defined sequence of message exchanges between two parties |
+| handshake | A bounded protocol establishing shared parameters |
+| channel | A medium through which messages flow |
+| port | A typed interaction point on a component |
+| adapter | A component that translates between two incompatible interfaces |
+| facade | An interface that simplifies access to a complex subsystem |
+| gateway | A boundary component mediating access between two scopes |
+| proxy | A component that forwards operations on behalf of a caller |
+| stub | A test double satisfying an interface without real behavior |
+
+**Domain:**
+| Token | Meaning |
+|---|---|
+| domain | A named set of entity classes and the invariants that govern them, independent of time, space, or flow |
+| subdomain | A cohesive subset of a domain, fully contained within the parent |
+| core domain | The domain representing the primary competitive differentiator |
+| supporting domain | A domain that enables the core domain without competitive value |
+| generic domain | A domain whose behavior is commodity and MAY be replaced off-the-shelf |
+| entity class | The definition of a type of entity: its identity, attributes, and lifecycle |
+| domain invariant | A condition that MUST hold for all instances of an entity class, always |
+| domain owner | The single authority responsible for a domain's entity classes and invariants |
+| seam constraint | A constraint governing the relationship between entity classes from two different domains, owned by neither |
+| anti-corruption layer | A boundary component translating between two domain models |
+| shared kernel | A subset of a domain model explicitly co-owned by two domains |
+| conformist | A domain that adopts another domain's model without translation |
+| domain event | An event recording a state change of an entity class |
+
+**Scope and Boundary:**
+| Token | Meaning |
+|---|---|
+| context | A scope within which a term has a single unambiguous meaning |
+| seam | A point where two components meet and may be independently replaced |
+| layer | A horizontal grouping of components at equivalent abstraction level |
+| module | A named, self-contained unit of behavior and state |
+| component | A deployable unit with a defined interface and lifecycle |
+| service | A component that exposes behavior over a network boundary |
+| consumer | A party that depends on an interface or contract |
+| provider | A party that fulfills an interface or contract |
+
+### Tier 9 — Boolean and Logical Operators
+
+Used to compose compound constraint statements. Every compound statement using these operators
+MUST be split into atomic sentences during normalization unless the operator itself
+is the constraint (e.g., an exclusive-or cardinality rule that cannot be expressed atomically).
+
+**Connectives:**
+| Token | Logical Symbol | Meaning |
+|---|---|---|
+| and | ∧ | Both conditions must hold simultaneously |
+| or | ∨ | At least one condition must hold; both may hold |
+| exclusive or | ⊕ | Exactly one condition must hold; not both |
+| not | ¬ | The condition must not hold |
+| if … then | → | The first condition holding requires the second to hold |
+| if and only if | ↔ | Both conditions hold or neither holds |
+| implies | → | Synonym for if … then; use in derivation traces |
+| unless | ¬A → B | If the first condition does not hold, the second must |
+
+**Quantifiers:**
+| Token | Logical Symbol | Meaning |
+|---|---|---|
+| for all | ∀ | The constraint applies to every member of the set |
+| there exists | ∃ | At least one member of the set satisfies the condition |
+| there exists exactly one | ∃! | Exactly one member satisfies the condition; no more, no fewer |
+| there exists at most one | ∃≤1 | Zero or one member satisfies the condition |
+| there exists at least one | ∃≥1 | One or more members satisfy the condition |
+
+**Cardinality Constraints:**
+| Token | Meaning |
+|---|---|
+| exactly N | Neither more nor fewer than N |
+| at most N | Upper bound; zero is permitted |
+| at least N | Lower bound; no upper bound unless stated |
+| between N and M | Lower and upper bounds, both inclusive |
+| zero or one | Optional but not repeatable |
+| one or more | Required and repeatable |
+
+**Truthiness and Completeness:**
+| Token | Meaning |
+|---|---|
+| holds | The condition evaluates to true in the current state |
+| does not hold | The condition evaluates to false in the current state |
+| is satisfiable | There exists at least one state in which the condition holds |
+| is unsatisfiable | No state exists in which the condition holds |
+| is vacuously true | The condition holds because its antecedent never applies |
+| is contradictory | The condition and its negation both hold — a conflict |
+| is tautological | The condition holds in every possible state |
+
+**Normalization rule for compound statements:**
+When a source sentence contains AND, OR, or UNLESS connecting two distinct predicates,
+split into two atomic nodes before proceeding.
+Preserve the connective as an edge type between the resulting nodes:
+
+```
+Source: "A user MUST be authenticated and have an active membership."
+
+N001: "A user MUST be authenticated."           [AuthN]
+N002: "A user MUST have an active membership."  [AuthZ]
+Edge:  N001 AND N002  → D001 (conjunct precondition for downstream operation)
+```
+
+Exclusive-or cardinality constraints are the primary exception — they cannot be
+split without losing the mutual exclusion semantic, so they are preserved as a
+single node typed `exclusive or`.
+
+---
+
+## Step 5: Extract
+
+Read `CONTENT` **start to end, statement by statement, no skipping**.
+Selection bias here poisons everything downstream.
+
+**Source pointer — required for every extracted statement.**
+Capture the most precise locator available for the source type:
+
+| Source Type | Required Pointer |
+|---|---|
+| Spec document | Section number + paragraph number + sentence position. Example: `§3.2 ¶4 s2` |
+| Markdown / plain text | Heading path + line number. Example: `## Payment Rules > ### Validation / line 47` |
+| Code — behavior statement | Class name + method name + line number. Example: `PaymentService.validate() / line 83` |
+| Code — type or field declaration | Class name + field name + line number. Example: `Order.paymentMethod / line 12` |
+| Code — annotation or decorator | Class name + annotation + line number. Example: `OrderController @Transactional / line 34` |
+| URL / fetched content | URL + section anchor or paragraph index. Example: `https://… #validation ¶2` |
+
+Prefer the nearest structural anchor (method name, heading, clause label) otherwise use line number.
+A statement with no traceable source pointer MUST be flagged.
+The pointer is permanent and survives every downstream phase unchanged.
+
+For every sentence, classify:
+
+| Source Type | Action |
+|---|---|
+| Formal assertion | Normalize → include |
+| Code statement | Translate using code translation rules → normalize → include |
+| Rationale prose | Mine for scope signals → annotate only, do not normalize |
+| Example | Flag as `[CANDIDATE]` if it implies an undocumented constraint |
+| Preamble / decorative | Discard |
+
+**Code translation rules:**
+
+Treat code as a normative spec written in a different language.
+Translate its structure and behavior into normalized narrative statements.
+The goal is to preserve the semantics that matter architecturally — not to describe
+the implementation mechanically.
+
+Apply the following translation patterns:
+
+**Null and presence checks**
+```java
+if (user == null) throw new IllegalArgumentException();
+```
+→ "A user MUST be present before this operation executes."
+⚠️ Scope this to the enclosing method or class — not globally.
+A null-check at one call site is NOT a global non-null invariant.
+
+**Ordering and precondition sequences**
+```java
+validate(order);
+authorize(user);
+persist(order);
+```
+→ "Validation MUST precede authorization."
+→ "Authorization MUST precede persistence."
+Each ordering relationship that is load-bearing becomes a separate node.
+Ask: would swapping these two lines break correctness or security?
+If yes → the ordering is a constraint. If no → it is an implementation detail, discard.
+
+**Idempotency**
+```java
+if (order.getStatus() == SUBMITTED) return;
+order.setStatus(SUBMITTED);
+```
+→ "The submit operation MUST be idempotent — applying it more than once
+   MUST produce the same result as applying it once."
+Flag the entity class and operation explicitly in the node.
+
+**Immutability**
+```java
+private final PaymentMethod paymentMethod;
+// no setter exposed
+```
+→ "A PaymentMethod MUST NOT be modified after assignment."
+Immutability at field level → value object constraint.
+Immutability at reference level → ownership constraint.
+Distinguish the two.
+
+**Atomicity and transactions**
+```java
+@Transactional
+public void createOrder(Order order, Payment payment) { ... }
+```
+→ "Order creation and payment recording MUST be atomic —
+   either both succeed or neither is persisted."
+
+**State machine transitions**
+```java
+if (order.getStatus() != PENDING) throw new IllegalStateException();
+order.setStatus(CONFIRMED);
+```
+→ "An order MUST be in PENDING state before it can transition to CONFIRMED."
+Translate every guarded transition. Together they define the lifecycle — compose
+them into a lifecycle node after individual nodes are established.
+
+**Cardinality from collection types and constraints**
+```java
+Set<Role> roles;  // roles.size() enforced by addRole() to max 3
+```
+→ "A user MUST have at most 3 roles."
+Collection type alone is not a constraint — enforce it only when the code
+explicitly guards cardinality.
+
+**Conditional branching as domain logic**
+```java
+if (user.isSuperAdmin()) {
+    return repository.findAll();
+} else {
+    return repository.findByOrgId(user.getOrgId());
+}
+```
+→ "A superadmin MAY query across all organizations."
+→ "A non-superadmin user MUST query within their own organization only."
+Each branch is a separate node. Do not collapse them.
+
+**Error type selection**
+```java
+throw new NotFoundException();  // on unauthorized access
+```
+→ "The system MUST return a not-found response on unauthorized access
+   to conceal entity existence from unauthorized callers."
+The choice of error type encodes a deliberate behavioral or security decision.
+Always extract it as an explicit constraint.
+
+**Retry and timeout semantics**
+```java
+retryTemplate.execute(ctx -> paymentGateway.charge(request), MAX_RETRIES);
+```
+→ "Payment gateway calls MUST be retried at most N times on failure."
+→ "Retry operations MUST be idempotent."
+Extract both the bound and the idempotency requirement as separate nodes.
+
+**What to discard:**
+- Variable names, formatting, comments that do not alter behavior
+- Internal helper method decomposition with no architectural significance
+- Logging, metrics, and instrumentation calls
+- Test setup and teardown code unless it reveals a contract
+
+---
+
+## Step 6: Normalize
+
+Rewrite every extracted statement using the controlled vocabulary.
+
+Rules:
+1. Active voice only
+2. Present tense only
+3. One claim per sentence — split on AND, OR, UNLESS
+4. Domain terms preserved verbatim
+5. No abbreviations, symbols, or code syntax
+6. Every banned adverb replaced or statement flagged
+
+Capture the full context block at this step — it is ephemeral and unrecoverable later:
+
+```
+N{n}  SOURCE: {precise source pointer}
+      STATEMENT:     "{normalized statement}"
+      ENTITY DOMAIN: {domain name}
+      RATIONALE:     "{rationale prose, verbatim, for human reference only}"
+      SEMANTIC FLAGS: [idempotent] [atomic] [immutable] [ordered] [bounded] — 
+                      only if the code translation step surfaced one of these properties
+```
+
+The `SEMANTIC FLAGS` field is populated exclusively from the code translation phase.
+It carries properties that the normalized narrative statement alone cannot fully express,
+ensuring they survive into typing and composition without being lost in plain language.
+
+**Entity domain assignment rule:**
+Assign to the domain of the entity class the statement *governs*.
+Not the flow it appears in. Not the section. Not the actor. Not the phase.
+
+If the statement governs a relationship between two entity classes from different domains,
+mark it `SEAM CONSTRAINT` and assign to neither domain.
+
+If the domain is ambiguous, flag `[DOMAIN UNRESOLVED]` — do not guess.
+
+---
+
+## Step 7: Negative to Positive
+
+Convert every prohibitive or exclusive statement to affirmative precondition form:
+
+```
+"No order without payment"           → "An order MUST require payment."
+"Unless authenticated, deny access"  → "Access MUST require authentication."
+"Orders lacking auth are rejected"   → "An order MUST require an authenticated user."
+```
+
+**Exception:** A statement that would lose its exclusion semantics when flipped stays as `MUST NOT`.
+Test: if flipping changes what the system *does*, preserve as `MUST NOT`.
+
+---
+
+## Step 8: Derive
+
+Apply only the logical connectives the spec itself uses — AND, OR, IF-THEN, UNLESS.
+No creative inference. No implied constraints.
+
+**First-order derivation:**
+Combine premises directly stated together. Each derivative carries a justification trace.
+
+```
+D{n} ← {N1, N3}
+      STATEMENT: "{derived statement}"
+      DOMAIN:    {domain}
+      TRACE:     "N1 AND N3 stated together in §2.1"
+```
+
+**Recurse downward:**
+For each node, ask: does this statement reference a term defined or constrained elsewhere in the spec?
+- YES → decompose into sub-nodes
+- NO  → leaf node. Stop. Tag `[UNDEFINED TERM]` if the term is undefined anywhere in the spec.
+
+**Recurse upward:**
+Once bottom is capped, walk up and ask: what higher-level claim does this cluster assert?
+That claim becomes a candidate top-level invariant (TLI).
+
+Circular references are real and meaningful — flag as `[CIRCULAR DEPENDENCY]`, do not break them.
+
+---
+
+## Step 9: Scope
+
+Confirm or reject domain assignments. All nodes must carry a domain before dedup.
+
+```
+1. List all entity classes and domains identified in the spec.
+2. For each node: confirm domain assignment or resolve [DOMAIN UNRESOLVED] flags.
+3. Identify all SEAM CONSTRAINTs — track in separate artifact.
+4. Flag any statement spanning more than two domains as [MULTI-DOMAIN CONSTRAINT].
+```
+
+Seam constraints are tracked separately. They are the first thing that breaks
+under independent domain evolution.
+
+---
+
+## Step 10: Deduplicate
+
+Two nodes are candidates for merging **only if predicate AND entity domain are identical**.
+
+Three passes in order:
+
+**Pass 1 — Syntactic:** identical normalized form → merge, union all source citations.
+
+**Pass 2 — Semantic:** same predicate, aliased terms per spec glossary → merge.
+  - Aliasing MUST be supported by a definition in the spec itself.
+  - Suspected aliases without spec evidence → flag `[SUSPECTED DUPLICATE]`, do not merge.
+
+**Pass 3 — Domain guard:** identical predicate, different domain → NOT duplicates. Preserve both.
+
+Merged nodes carry ALL source citations. Original statements are never deleted.
+
+---
+
+## Step 11: Type
+
+Assign exactly one modal to every node:
+
+| Type | Modal | Meaning |
+|---|---|---|
+| `invariant` | MUST | Holds at all times, no exceptions |
+| `exclusion` | MUST NOT | Hard prohibition |
+| `soft` | SHOULD | Strong preference, exceptions acknowledged |
+| `conditional` | MUST (when X) | Holds only when a stated predicate is true |
+| `permission` | MAY | Permitted but not required |
+
+If the source is ambiguous between MUST and SHOULD, flag `[MODAL UNRESOLVED]` for spec owner.
+Do not resolve by assumption.
+
+---
+
+## Step 12: Conflict Check
+
+**Intra-domain conflicts:**
+Same entity class, mutually exclusive predicates → `ERROR`.
+Must be resolved before the graph is trusted.
+
+**Seam constraint conflicts:**
+A seam constraint that contradicts a domain invariant on either side → `INTEGRATION RISK`.
+Flag separately. Never auto-resolve.
+
+**Phantom conflicts:**
+Apparent contradictions between nodes that are actually undetected duplicates.
+Resolve by re-running dedup pass before escalating to spec owner.
+
+All conflicts are visible artifacts with full citation trails. None are auto-resolved.
+
+---
+
+## Step 13: Compose
+
+Walk bottom-up. Cluster nodes whose combined meaning asserts a higher-level claim.
+That claim becomes a **top-level invariant (TLI)**.
+
+```
+TLI-{n}
+  STATEMENT: "{system-level contract}"
+  DOMAIN:    {domain}
+  NODES:     {N3, N7, D2}
+  TYPE:      invariant | guarantee | constraint
+```
+
+TLIs are your system contracts — acceptance criteria, SLA commitments, architecture decisions.
+Every TLI must be traceable down to its constituent normalized statements and source locations.
+
+---
+
+## Step 14: Build JSON Output
+
+Produce this structure:
 
 ```json
 {
   "system": "<system name>",
   "spec_summary": "2-3 sentences: what this spec defines and its scope.",
-  "claims": [
+  "vocabulary_violations": [
     {
-      "id": "CLM-001",
+      "location": "§2.1, line 4",
+      "original": "the system should respond quickly",
+      "violation": "banned adverb: quickly",
+      "action": "FLAGGED — replace with bounded time expression"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "N001",
       "slug": "kebab-case-max-50-chars",
       "title": "Human-readable label",
-      "category": "premise|invariant|guarantee|constraint|postcondition|precondition",
-      "statement": "Single falsifiable declarative sentence. Active voice, present tense, RFC 2119 modal. Example: 'Every domain model MUST carry an organizationId foreign key.'",
-      "rationale": "1-3 sentences: why this claim exists, which risk it mitigates.",
-      "violation_scenario": "Concrete example of what breaks if this claim is false. Name the data state and observable consequence.",
-      "assertion_hint": "Pseudo-code or natural language describing how to assert this in a unit/integration test or runtime check.",
-      "depends_on": ["CLM-00X"],
-      "tags": ["domain-tag"]
+      "statement": "Single normalized declarative sentence.",
+      "type": "invariant|exclusion|soft|conditional|permission",
+      "modal": "MUST|MUST NOT|SHOULD|MAY",
+      "entity_domain": "DomainName",
+      "seam_constraint": false,
+      "sources": [
+        {
+          "pointer": "§2.1 ¶3 s1",
+          "type": "spec"
+        },
+        {
+          "pointer": "PaymentService.validate() / line 83",
+          "type": "code"
+        }
+      ],
+      "semantic_flags": ["idempotent", "atomic"],
+      "rationale": "Verbatim rationale prose from spec, for reference only.",
+      "depends_on": ["N003"],
+      "flags": []
+    }
+  ],
+  "seam_constraints": [
+    {
+      "id": "SC001",
+      "statement": "...",
+      "domain_a": "Order",
+      "domain_b": "Payment",
+      "sources": ["§4.2 line 7"]
+    }
+  ],
+  "top_level_invariants": [
+    {
+      "id": "TLI-001",
+      "statement": "...",
+      "domain": "Payment",
+      "composed_from": ["N003", "N007", "D002"],
+      "type": "invariant"
+    }
+  ],
+  "flags": [
+    {
+      "id": "FLAG-001",
+      "type": "UNDEFINED_TERM|DOMAIN_UNRESOLVED|MODAL_UNRESOLVED|SUSPECTED_DUPLICATE|CIRCULAR_DEPENDENCY|CONFLICT|CANDIDATE",
+      "node": "N007",
+      "description": "Term 'trial period' is undefined in spec.",
+      "action_required": "Spec owner must define or clarify."
+    }
+  ],
+  "conflicts": [
+    {
+      "id": "CONFLICT-001",
+      "type": "intra-domain|seam",
+      "nodes": ["N003", "N011"],
+      "description": "N003 and N011 assert mutually exclusive predicates for PaymentMethod.",
+      "status": "UNRESOLVED"
     }
   ]
 }
 ```
 
-### Claim Categories — Definitions
-
-| Category | Meaning | Modal | Example |
-|---|---|---|---|
-| `premise` | Assumed true about the environment; not enforced by this system | WILL | "The database WILL enforce foreign key constraints on organizationId" |
-| `invariant` | Always true regardless of operation sequence | SHALL / SHALL NOT | "Every domain model SHALL carry an organizationId foreign key" |
-| `guarantee` | What this system promises to callers and consumers | MUST | "The org-switch MUST reflect the new orgId on all subsequent requests" |
-| `constraint` | Hard limit on valid inputs or state transitions | MUST NOT | "A session MUST NOT be active in more than one organization simultaneously" |
-| `precondition` | Must hold before an operation executes | MUST | "A user MUST have an active Membership before querying org data" |
-| `postcondition` | Must hold after an operation completes | MUST | "After signup, an OWNER Membership MUST exist linking User to Organization" |
-
-### Extraction Rules
-
-1. **Falsifiability gate**: every `statement` must be disprovable by a concrete counterexample. Reject vague prose ("the system should be secure") — rewrite as a specific, measurable claim or discard.
-2. **Active voice, present tense, modal verb**: use MUST / MUST NOT / SHALL / SHALL NOT / WILL per RFC 2119 semantics.
-3. **One claim per statement**: do not bundle compound conditions into one claim.
-4. **Quantity and boundary claims are gold**: "exactly one", "at most N", "within T ms", "never null". Extract these aggressively. Example: "Every domain model MUST carry an `organizationId` foreign key" is stronger than "models should have org context".
-5. **Derive implicit claims**: if the spec says "queries are org-scoped", extract the explicit invariant "Every Prisma read query on a tenant-scoped model MUST include `organizationId: ctx.session.orgId` in the `where` clause."
-6. **Code examples are specs too**: for every code snippet, treat its structure as normative — not just its logic. Ask: "if a competent developer rewrote this from scratch and got a structural detail slightly wrong, would it silently violate correctness or security?" Extract a claim for each yes. The `violation_scenario` MUST show the plausible wrong version alongside the observable failure.
-7. **Conspicuous absence**: what a spec omits is as normative as what it states. For each operation, data flow, or data type, ask: "what mechanism is conspicuously not shown — revocation, validation, expiry, rollback, authorization?" Each deliberate omission is a candidate invariant (e.g. "tokens MUST NOT have a server-side revocation path" or "input X is never validated because it comes from a trusted source").
-8. **Cross-example consistency**: when multiple code examples share a structural pattern, that repetition defines an implicit convention. Compare examples to each other — patterns present in all examples are invariants; inconsistencies between examples are potential conflicts requiring a claim.
-9. **Type signatures and schema shape**: treat field optionality, nullability, and enum member sets as claim sources. A required field encodes an invariant; an optional field encodes a constraint on when it may be absent; a closed enum encodes a finite set of valid states. Extract these as claims, not just as schema observations.
-10. **Pipeline and call-site ordering**: when a spec shows a middleware chain, pipe, decorator stack, or multi-step sequence, extract a claim for each stage whose position is load-bearing. Ask: "what does this stage assume has already run, and what would break if it ran earlier or later?"
-11. **Error type selection**: when a spec names a specific error type (e.g. `NotFoundError` vs `AuthorizationError`), extract the implied constraint. The choice of error encodes a deliberate behavioral or security decision — returning `NotFoundError` on an unauthorized access intentionally hides existence; that is a claim, not an implementation detail.
-12. **Map dependencies**: if CLM-002 only holds because CLM-001 holds (e.g., query filtering depends on every model having `organizationId`), record it in `depends_on`.                                                       13. Extract 5–25 claims depending on spec richness. Thin specs = fewer, tighter. Dense specs = more, still tight.
-
 Store result in `EXTRACTION`.
 
 ---
 
-## Step 5: Semantic Deduplication
+## Step 15: Semantic Deduplication Against Vault
 
-For each claim in `EXTRACTION.claims`:
+For each node in `EXTRACTION.nodes`:
 
-### 5a. Build query
+### 15a. Build query
 ```
-QUERY = "{claim.title} {claim.statement}"
+QUERY = "{node.title} {node.statement} {node.entity_domain}"
 ```
 
-### 5b. Search existing claims
+### 15b. Search existing nodes
 ```
 mcp__qmd__vsearch(query: QUERY, limit: 3, minScore: 0.80)
 ```
 
-### 5c. Classify
+### 15c. Classify
 
 - **No match ≥ 0.80** → `CREATE_NEW`
-- **Match ≥ 0.80 in `claims/` folder** → read existing; compare:
-  - Statements are *semantically equivalent* → `SKIP`
-  - New claim *strengthens or contradicts* existing → `CONFLICT` (flag for human review)
-  - New claim *adds scope, system, or assertion hint* → `MERGE`
+- **Match ≥ 0.80, same domain** → read existing; compare:
+  - Semantically equivalent → `SKIP`
+  - New node strengthens or contradicts → `CONFLICT` (flag for human review)
+  - New node adds scope, system, or assertion hint → `MERGE`
+- **Match ≥ 0.80, different domain** → `CREATE_NEW` (domain distinction is load-bearing)
 
-> ⚠️ **Contradictions are first-class findings.** If CLM-NEW contradicts an existing claim, do NOT silently merge. Surface it explicitly in the report. Do NOT write the file.
->
-> Example: existing says "A SUPERADMIN MAY read across orgs"; new spec says "A SUPERADMIN MUST bypass all org filters including writes" — that's a CONFLICT, not a MERGE.
+> ⚠️ Contradictions are first-class findings. If N-NEW contradicts an existing node,
+> do NOT silently merge. Surface it in the report. Do NOT write the file.
 
 ---
 
-## Step 6: Report Plan
+## Step 16: Report Plan
 
 ```
-Extracted {N} design claims from "{TITLE}" ({SYSTEM}):
+Extracted {N} constraint nodes from "{TITLE}" ({SYSTEM}):
 
-CREATE   {X} new claim files
-MERGE    {Y} existing claim files
-CONFLICT {C} contradictions — HUMAN REVIEW REQUIRED
-SKIP     {Z} duplicates
+Domains identified:     {list}
+Seam constraints:       {X}
+Top-level invariants:   {Y}
+
+CREATE    {A} new node files
+MERGE     {B} existing node files
+CONFLICT  {C} contradictions — HUMAN REVIEW REQUIRED
+SKIP      {D} duplicates
+
+Flags requiring spec owner action:
+  [UNDEFINED_TERM]     {n} terms
+  [DOMAIN_UNRESOLVED]  {n} nodes
+  [MODAL_UNRESOLVED]   {n} nodes
+  [CIRCULAR_DEP]       {n} cycles
 
 Contradiction details:
-  ⚡ CLM-NEW-008 vs claims/claim-superadmin-access.md
-     New:      "A SUPERADMIN MUST bypass organizationId filtering on all operations"
-     Existing: "A SUPERADMIN MAY read data across all organizations"
+  ⚡ N-NEW-008 vs claims/node-payment-method-validity.md
+     New:      "A PaymentMethod MUST be validated on every order."
+     Existing: "A PaymentMethod MUST be validated on create only."
      → Resolve before ingesting.
 ```
 
@@ -157,7 +824,7 @@ Contradiction details:
 
 ---
 
-## Step 7: Create Source Index File
+## Step 17: Create Source Index File
 
 Create `{OUTPUT_DIR}/{SYSTEM}-claims-index.md`:
 
@@ -170,23 +837,58 @@ created: {YYYY-MM-DD}
 spec_file: "{original_filename}"
 ---
 
-# Design Claims: {SYSTEM}
+# Constraint Graph: {SYSTEM}
 
 {spec_summary}
 
-## Claim Registry
+## Domain Map
 
-| ID      | Title     | Category   | File                      |
-|---------|-----------|------------|---------------------------|
-| CLM-001 | {title}   | {category} | [[claims/claim-{slug}]]   |
+| Domain | Entity Classes | Node Count |
+|--------|---------------|------------|
+| {domain} | {entity classes} | {n} |
+
+## Node Registry
+
+| ID    | Title   | Type      | Domain   | File                     |
+|-------|---------|-----------|----------|--------------------------|
+| N001  | {title} | {type}    | {domain} | [[claims/node-{slug}]]   |
+
+## Seam Constraints
+
+| ID    | Statement | Domain A | Domain B |
+|-------|-----------|----------|----------|
+| SC001 | {stmt}    | {a}      | {b}      |
+
+## Top-Level Invariants
+
+| ID      | Statement | Domain |
+|---------|-----------|--------|
+| TLI-001 | {stmt}    | {dom}  |
 
 ## Dependency Graph
 
 \```
-CLM-002 → CLM-001
-CLM-004 → CLM-001
-CLM-004 → CLM-005
+N002 → N001
+N004 → N001
+N004 → SC001
 \```
+
+## Open Flags
+
+| Flag ID  | Type              | Node | Description |
+|----------|-------------------|------|-------------|
+| FLAG-001 | UNDEFINED_TERM    | N007 | "trial period" undefined |
+
+## Unresolved Conflicts
+
+### ⚡ N-NEW-{n} vs [[claims/node-{existing-slug}]]
+
+| | Statement |
+|---|---|
+| **Existing** | "{existing statement}" |
+| **New** | "{new statement}" |
+
+**Action required:** {what differs and what to decide}.
 
 ## Source
 
@@ -194,40 +896,25 @@ CLM-004 → CLM-005
 - **Extracted:** {YYYY-MM-DD}
 ```
 
-Omit `## Dependency Graph` if no `depends_on` relationships exist.
-
-If any `CONFLICT` claims were found, append to the index:
-
-```markdown
-## Unresolved Conflicts
-
-### ⚡ CLM-NEW-{N} vs [[claims/claim-{existing-slug}]]
-
-| | Statement |
-|---|---|
-| **Existing** (`claim-{existing-slug}.md`) | "{existing statement}" |
-| **New** (`{spec_file}`) | "{new statement}" |
-
-**Action required:** {brief description of what differs and what to decide}.
-Re-run `/claims` after resolution.
-```
-
 ---
 
-## Step 8: Create New Claim Files
+## Step 18: Create New Node Files
 
-For each `CREATE_NEW` claim, create `{OUTPUT_DIR}/claim-{slug}.md`:
+For each `CREATE_NEW` node, create `{OUTPUT_DIR}/node-{slug}.md`:
 
 ```markdown
 ---
 id: {id}
 tags:
-  - claims/{category}
+  - claims/{type}
   - system/{SYSTEM}
-  - {tags...}
-category: {category}
+  - domain/{entity_domain}
+type: {type}
+modal: {MUST|MUST NOT|SHOULD|MAY}
+entity_domain: {domain}
 system: {SYSTEM}
 source: "[[claims/{SYSTEM}-claims-index]]"
+seam_constraint: {true|false}
 added: {YYYY-MM-DD}
 ---
 
@@ -235,23 +922,26 @@ added: {YYYY-MM-DD}
 
 > **{statement}**
 
+## Domain
+
+{entity_domain}
+{if seam_constraint: "⚠️ Seam constraint between {domain_a} and {domain_b}."}
+
+## Sources
+
+{sources as list with section and line references}
+
 ## Rationale
 
-{rationale}
-
-## Violation Scenario
-
-{violation_scenario}
-
-## Assertion Hint
-
-\```pseudo
-{assertion_hint}
-\```
+{rationale verbatim from spec — for human reference, not part of the constraint}
 
 ## Dependencies
 
 {depends_on as wikilinks, or "None"}
+
+## Flags
+
+{flags, or "None"}
 
 ---
 *Extracted from: {TITLE} — {YYYY-MM-DD}*
@@ -259,21 +949,21 @@ added: {YYYY-MM-DD}
 
 ---
 
-## Step 9: Merge Into Existing Claim Files
+## Step 19: Merge Into Existing Node Files
 
-For each `MERGE` claim:
+For each `MERGE` node:
 
 1. Read existing file.
 2. Update frontmatter:
    - Add `updated: {YYYY-MM-DD}`
-   - If `system:` is a scalar, convert to array and append new system
-   - If `source:` is a scalar, rename to `sources:` array and append new index link
+   - If `system:` is scalar, convert to array and append new system
+   - If `source:` is scalar, rename to `sources:` array and append new index link
 3. Append section before the final `---` footer:
 
 ```markdown
 ## Additional Context ({SYSTEM}, {YYYY-MM-DD})
 
-{new assertion hint, scope extension, or implementation detail}
+{new rationale, scope extension, or additional source evidence}
 
 *Source: {TITLE}*
 ```
@@ -282,36 +972,69 @@ For each `MERGE` claim:
 
 ---
 
-## Step 10: Final Report
+## Step 20: Final Report
 
 ```
-=== Claims Extraction Complete ({SYSTEM}) ===
+=== Constraint Graph Complete ({SYSTEM}) ===
 
-Index:     {SYSTEM}-claims-index.md
-Created:   {X} claim files
-Merged:    {Y} claim files
-Conflicts: {C} (see index — unresolved, files NOT written)
-Skipped:   {Z} duplicates
+Index:          {SYSTEM}-claims-index.md
+Domains:        {list}
+Seam Constraints:    {X} (see index)
+Top-Level Invariants: {Y}
+
+Created:    {A} node files
+Merged:     {B} node files
+Conflicts:  {C} (see index — unresolved, files NOT written)
+Skipped:    {D} duplicates
 
 ⚡ UNRESOLVED CONFLICTS — action required:
   {list each conflict with both statements}
 
-📋 Full Claim Registry:
+🚩 OPEN FLAGS — spec owner action required:
+  {list each flag with description}
+
+📋 Full Node Registry:
 ────────────────────────────────────────
-{ID} [{category}] {statement}
+{ID} [{type}] [{domain}] {statement}
+...
+────────────────────────────────────────
+
+📋 Top-Level Invariants:
+────────────────────────────────────────
+{TLI-ID} [{domain}] {statement}
+  ← {node ids}
 ...
 ────────────────────────────────────────
 ```
 
 ---
 
+## Inviolable Rules
+
+These rules apply at every phase. Any output that violates them is incorrect.
+
+```
+1. No node without a source citation.
+2. No edge without an explicit logical basis in the source.
+3. No inference beyond what the spec or code states.
+4. No assumption silently promoted to constraint.
+5. No gap auto-resolved — every unknown is a visible flag.
+6. No banned adverb survives normalization.
+7. No domain assignment by flow, section, or actor — only by entity class.
+8. No dedup across different entity domains.
+9. No conflict auto-resolved — conflicts are artifacts, not obstacles.
+10. No implied constraint — only explicit semantics from the source.
+```
+
+---
+
 ## Fallback: No qmd Available
 
-If `mcp__qmd__vsearch` is not available or returns an error:
+If `mcp__qmd__vsearch` is not available:
 
 1. Fall back to filename matching:
    ```bash
-   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from claim title}"
+   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from node title}"
    ```
 2. If similar filename found, read it and do manual comparison.
 3. Otherwise, create new file.
@@ -322,7 +1045,7 @@ If `mcp__qmd__vsearch` is not available or returns an error:
 
 **User input:**
 ```
-/claims ~/docs/Multitenancy.md --system blitz-multitenancy
+/claims ~/docs/PaymentService.md --system payment-service
 ```
 
 **Output:**
@@ -330,80 +1053,90 @@ If `mcp__qmd__vsearch` is not available or returns an error:
 Reading config... vault at ~/Documents/notes
 
 Reading spec...
-Document: Multitenancy.md, ~1,800 words
+Document: PaymentService.md, ~2,400 words
 
-Analyzing and extracting design claims...
+Applying controlled vocabulary...
 
-Extracted 8 claims from "Multitenancy.md" (blitz-multitenancy):
+Extracting and normalizing statements...
 
-1. organizationid-on-every-model        (invariant)
-2. query-must-filter-by-orgid           (invariant)
-3. create-must-attach-orgid             (postcondition)
-4. update-delete-where-includes-orgid   (invariant)
-5. session-scoped-to-one-org            (constraint)
-6. entity-assigned-to-membership        (constraint)
-7. signup-creates-org-and-membership    (postcondition)
-8. superadmin-bypasses-org-filter       (guarantee)
+Identified domains: Payment, Order, Identity
+
+Extracted 11 constraint nodes:
+
+ 1. payment-method-requires-non-expired      (invariant)    [Payment]
+ 2. order-requires-valid-payment-method      (invariant)    [Order]
+ 3. order-requires-authenticated-user        (invariant)    [Order]
+ 4. transaction-must-be-atomic               (invariant)    [Payment]
+ 5. refund-references-existing-transaction   (invariant)    [Payment]
+ 6. session-scoped-to-one-identity           (constraint)   [Identity]
+ 7. payment-method-validated-on-create       (postcondition)[Payment]
+ 8. order-payment-method-seam               (seam)         [Order ↔ Payment]
+ 9. admin-may-override-validation-limit      (permission)   [Payment]
+10. acknowledgment-must-precede-fulfillment  (invariant)    [Order]
+11. retry-must-be-idempotent                 (invariant)    [Payment]
+
+Flags:
+  [UNDEFINED_TERM]     N009 — "validation limit" undefined in spec
+  [MODAL_UNRESOLVED]   N009 — MAY vs SHOULD ambiguous in source
 
 Checking for semantic duplicates...
-  ✓ organizationid-on-every-model       → no similar claims
-  ✓ query-must-filter-by-orgid          → no similar claims
-  ✓ create-must-attach-orgid            → no similar claims
-  ✓ update-delete-where-includes-orgid  → no similar claims
-  ✓ session-scoped-to-one-org           → found: claim-session-single-context.md (0.82)
-    → New info: orgId in Blitz PublicData; $setPublicData switch mechanism
+  ✓ payment-method-requires-non-expired   → no similar nodes
+  ✓ order-requires-valid-payment-method   → found: node-order-payment-check.md (0.84)
+    → Same predicate, same domain
+    → New source adds §4.2 reference
     → Will merge
-  ✓ entity-assigned-to-membership       → no similar claims
-  ✓ signup-creates-org-and-membership   → no similar claims
-  ✗ superadmin-bypasses-org-filter      → found: claim-superadmin-access.md (0.93)
-    → CONFLICT: existing says MAY read across orgs;
-                new spec says MUST bypass filter on ALL operations
+  ✗ payment-method-validated-on-create    → found: node-payment-method-validity.md (0.91)
+    → CONFLICT: existing says "validated on every order"
+                new spec says "validated on create only"
     → Flagged — file NOT written
+
+Top-Level Invariants composed:
+  TLI-001 [Payment]  "The Payment domain guarantees all transactions reference
+                      valid, non-expired payment methods established at create time."
+           ← N001, N004, N007
 
 Creating files...
 
-Created index:
-  claims/blitz-multitenancy-claims-index.md
+=== Constraint Graph Complete (payment-service) ===
 
-Created 6 claim files:
-  ✓ claims/claim-organizationid-on-every-model.md
-  ✓ claims/claim-query-must-filter-by-orgid.md
-  ✓ claims/claim-create-must-attach-orgid.md
-  ✓ claims/claim-update-delete-where-includes-orgid.md
-  ✓ claims/claim-entity-assigned-to-membership.md
-  ✓ claims/claim-signup-creates-org-and-membership.md
+Index:               payment-service-claims-index.md
+Domains:             Payment, Order, Identity
+Seam Constraints:    1
+Top-Level Invariants: 1
 
-Merged into existing:
-  ✓ claims/claim-session-single-context.md
-    Added: orgId in Blitz PublicData; $setPublicData switch; dual-role array shape
-
-Skipped (conflict — not written):
-  ✗ superadmin-bypasses-org-filter → claim-superadmin-access.md
-    Reason: MAY (read-only) vs MUST (all operations) contradicts existing claim
-
-=== Claims Extraction Complete (blitz-multitenancy) ===
-
-Index:     blitz-multitenancy-claims-index.md
-Created:   6 claim files
-Merged:    1 claim file
-Conflicts: 1 (see index — unresolved, file NOT written)
-Skipped:   0
+Created:    9 node files
+Merged:     1 node file
+Conflicts:  1 (see index — unresolved, file NOT written)
+Skipped:    0
 
 ⚡ UNRESOLVED CONFLICTS — action required:
-  claim-superadmin-access.md vs CLM-NEW-008
-    Existing: "A SUPERADMIN MAY read data across all organizations"
-    New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
-    → Read-only vs all-operations is a security boundary decision.
-      Confirm with the platform team; update the winning file's modal verb.
+  node-payment-method-validity.md vs N007
+    Existing: "A PaymentMethod MUST be validated on every order."
+    New spec:  "A PaymentMethod MUST be validated on create only."
+    → Validation timing is a security and performance boundary decision.
+      Confirm with the payments team before proceeding.
 
-📋 Full Claim Registry:
+🚩 OPEN FLAGS — spec owner action required:
+  FLAG-001 [UNDEFINED_TERM]    N009 — "validation limit" has no definition in spec
+  FLAG-002 [MODAL_UNRESOLVED]  N009 — source says "can override"; MUST or MAY?
+
+📋 Full Node Registry:
 ────────────────────────────────────────
-CLM-001 [invariant]     Every domain model except User and Organization MUST carry an organizationId foreign key.
-CLM-002 [invariant]     Every Prisma read query on a tenant-scoped model MUST include organizationId: ctx.session.orgId in the where clause.
-CLM-003 [postcondition] On create, every tenant-scoped record MUST have organizationId set to ctx.session.orgId.
-CLM-004 [invariant]     Update and delete mutations MUST include organizationId: ctx.session.orgId in the Prisma where clause.
-CLM-005 [constraint]    A session MUST NOT be active in more than one organization simultaneously.
-CLM-006 [constraint]    Entities with per-person assignment semantics MUST use membershipId, NOT userId, as the owner foreign key.
-CLM-007 [postcondition] A successful signup MUST atomically produce a User, an Organization, and an OWNER Membership.
+N001 [invariant]    [Payment]  A payment method MUST NOT be expired.
+N002 [invariant]    [Order]    An order MUST require a valid payment method.
+N003 [invariant]    [Order]    An order MUST require an authenticated user.
+N004 [invariant]    [Payment]  A transaction MUST be atomic.
+N005 [invariant]    [Payment]  A refund MUST reference an existing transaction.
+N006 [constraint]   [Identity] A session MUST be scoped to exactly one identity at a time.
+N008 [seam]         [Order↔Payment] An order MUST reference a payment method that satisfies Payment domain invariants.
+N010 [invariant]    [Order]    An acknowledgment MUST precede order fulfillment.
+N011 [invariant]    [Payment]  A retry operation MUST be idempotent.
+────────────────────────────────────────
+
+📋 Top-Level Invariants:
+────────────────────────────────────────
+TLI-001 [Payment] "The Payment domain guarantees all transactions reference
+                   valid, non-expired payment methods established at create time."
+  ← N001, N004, N007
 ────────────────────────────────────────
 ```
