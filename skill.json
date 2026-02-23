@@ -1,6 +1,6 @@
 {
   "name": "claims",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Ingest specs, ADRs, and post-mortems into atomic, falsifiable design claims with semantic deduplication and conflict detection.",
   "author": "mtuchkov",
   "homepage": "https://github.com/mtuchkov/claude-claims-skill",
