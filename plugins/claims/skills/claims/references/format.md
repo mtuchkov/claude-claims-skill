@@ -1,17 +1,50 @@
 # Constraint Graph Note Formats
 
-This skill creates FOUR types of files:
+This skill creates SIX types of files:
 
-1. **Graph Index** — Registry of all nodes, seam constraints, and top-level invariants extracted from a source
+1. **Graph Index** — Registry of all nodes, seam constraints, top-level invariants, implicit claims, and TIL extracted from a source
 2. **Node Notes** — Standalone atomic files, one per normalized constraint statement
 3. **Seam Constraint Notes** — Standalone files for constraints that govern relationships across domain boundaries
 4. **Top-Level Invariant Notes** — Composed system contracts derived from clusters of nodes
+5. **Implicit Claim Notes** — Unconfirmed conditions extracted from code/spec assumptions; require spec owner confirmation before use
+6. **TIL Notes** — Architectural observations discovered during analysis; not constraints, but worth preserving
+
+---
+
+## File Naming Convention
+
+```
+<domain>-<type3>-<name>.md
+```
+
+- `<domain>`: lowercase domain name (e.g., `payment`, `order`, `identity`)
+- `<type3>`: 3-letter type code (see table below)
+- `<name>`: kebab-case descriptive name, max 50 chars
+
+**3-letter type codes:**
+
+| Code | Type |
+|------|------|
+| `inv` | invariant |
+| `exc` | exclusion |
+| `sft` | soft |
+| `cnd` | conditional |
+| `prm` | permission |
+| `sea` | seam |
+| `der` | derived |
+| `tli` | top-level invariant |
+| `imp` | implicit |
+| `til` | TIL |
+
+**Special cases:**
+- Index file: `{system}-idx.md` — no domain prefix, no type code
+- Seam constraints: use `domain_a` (the dependent domain) as the filename domain
 
 ---
 
 ## Graph Index
 
-Created at: `claims/{system}-claims-index.md`
+Created at: `claims/{system}-idx.md`
 
 ```markdown
 ---
@@ -34,21 +67,35 @@ spec_file: "{original-filename-or-url}"
 
 ## Node Registry
 
-| ID    | Title   | Type      | Modal     | Domain   | File                     |
-|-------|---------|-----------|-----------|----------|--------------------------|
-| N001  | {title} | {type}    | {modal}   | {domain} | [[claims/node-{slug}]]   |
+| ID    | Title   | Type      | Modal     | Domain   | File                                       |
+|-------|---------|-----------|-----------|----------|--------------------------------------------|
+| N001  | {title} | {type}    | {modal}   | {domain} | [[claims/{domain_lower}-{type3}-{name}]]   |
 
 ## Seam Constraints
 
 | ID    | Statement | Domain A | Domain B | File |
 |-------|-----------|----------|----------|------|
-| SC001 | {stmt}    | {a}      | {b}      | [[claims/seam-{slug}]] |
+| SC001 | {stmt}    | {a}      | {b}      | [[claims/{domain_a_lower}-sea-{name}]] |
 
 ## Top-Level Invariants
 
-| ID      | Statement | Domain | Composed From |
-|---------|-----------|--------|---------------|
-| TLI-001 | {stmt}    | {dom}  | N001, N003, D002 |
+| ID      | Statement | Domain | Composed From | File |
+|---------|-----------|--------|---------------|------|
+| TLI-001 | {stmt}    | {dom}  | N001, N003, D002 | [[claims/{domain_lower}-tli-{name}]] |
+
+## Implicit Claims
+
+| ID   | Statement | Domain | Origin |
+|------|-----------|--------|--------|
+| I001 | {stmt}    | {dom}  | {where it was implied} |
+
+> ⚠️ All implicit claims require spec owner confirmation before use.
+
+## TIL
+
+| ID      | Domain | Statement | File |
+|---------|--------|-----------|------|
+| TIL-001 | {dom}  | {stmt}    | [[claims/{domain_lower}-til-{name}]] |
 
 ## Dependency Graph
 
@@ -85,6 +132,8 @@ TLI-001 ← N001, N003, SC001
 - **Node Registry**: Every node extracted, including merged ones
 - **Seam Constraints**: Cross-domain relationship constraints — tracked separately, owned by neither domain
 - **Top-Level Invariants**: Composed system contracts, each traceable to constituent node IDs
+- **Implicit Claims**: Unconfirmed assumptions surfaced from code or spec — never promote until confirmed
+- **TIL**: Architectural observations worth preserving; not constraints
 - **Dependency Graph**: Only include edges that exist; omit section if no dependencies
 - **Open Flags**: Every unresolved ambiguity — spec owner must action before graph is trusted
 
@@ -115,28 +164,44 @@ and cross-domain contracts between Order and Payment entity classes.
 
 ## Node Registry
 
-| ID   | Title                                  | Type        | Modal    | Domain   | File                                             |
-|------|----------------------------------------|-------------|----------|----------|--------------------------------------------------|
-| N001 | Payment Method Must Not Be Expired     | invariant   | MUST NOT | Payment  | [[claims/node-payment-method-not-expired]]       |
-| N002 | Order Requires Valid Payment Method    | invariant   | MUST     | Order    | [[claims/node-order-requires-valid-payment]]     |
-| N003 | Order Requires Authenticated User      | invariant   | MUST     | Order    | [[claims/node-order-requires-auth-user]]         |
-| N004 | Transaction Must Be Atomic             | invariant   | MUST     | Payment  | [[claims/node-transaction-atomic]]               |
-| N005 | Refund References Existing Transaction | invariant   | MUST     | Payment  | [[claims/node-refund-references-transaction]]    |
-| N006 | Session Scoped to One Identity         | constraint  | MUST NOT | Identity | [[claims/node-session-single-identity]]          |
-| N007 | Retry Operation Must Be Idempotent     | invariant   | MUST     | Payment  | [[claims/node-retry-idempotent]]                 |
-| N008 | Acknowledgment Precedes Fulfillment    | invariant   | MUST     | Order    | [[claims/node-acknowledgment-precedes-fulfill]]  |
+| ID   | Title                                  | Type        | Modal    | Domain   | File                                                       |
+|------|----------------------------------------|-------------|----------|----------|------------------------------------------------------------|
+| N001 | Payment Method Must Not Be Expired     | invariant   | MUST NOT | Payment  | [[claims/payment-inv-payment-method-not-expired]]          |
+| N002 | Order Requires Valid Payment Method    | invariant   | MUST     | Order    | [[claims/order-inv-order-requires-valid-payment]]          |
+| N003 | Order Requires Authenticated User      | invariant   | MUST     | Order    | [[claims/order-inv-order-requires-auth-user]]              |
+| N004 | Transaction Must Be Atomic             | invariant   | MUST     | Payment  | [[claims/payment-inv-transaction-atomic]]                  |
+| N005 | Refund References Existing Transaction | invariant   | MUST     | Payment  | [[claims/payment-inv-refund-references-transaction]]       |
+| N006 | Session Scoped to One Identity         | invariant   | MUST NOT | Identity | [[claims/identity-inv-session-single-identity]]            |
+| N007 | Retry Operation Must Be Idempotent     | invariant   | MUST     | Payment  | [[claims/payment-inv-retry-idempotent]]                    |
+| N008 | Acknowledgment Precedes Fulfillment    | invariant   | MUST     | Order    | [[claims/order-inv-acknowledgment-precedes-fulfill]]       |
+| D001 | Order Requires Auth User and Payment   | invariant   | MUST     | Order    | [[claims/order-der-order-requires-auth-and-payment]]       |
 
 ## Seam Constraints
 
-| ID   | Statement                                                                 | Domain A | Domain B | File                                         |
-|------|---------------------------------------------------------------------------|----------|----------|----------------------------------------------|
-| SC001| An order MUST reference a payment method satisfying Payment invariants.   | Order    | Payment  | [[claims/seam-order-payment-method-ref]]     |
+| ID   | Statement                                                                 | Domain A | Domain B | File                                              |
+|------|---------------------------------------------------------------------------|----------|----------|---------------------------------------------------|
+| SC001| An order MUST reference a payment method satisfying Payment invariants.   | Order    | Payment  | [[claims/order-sea-order-payment-method-ref]]     |
 
 ## Top-Level Invariants
 
-| ID      | Statement                                                                                              | Domain  | Composed From       |
-|---------|--------------------------------------------------------------------------------------------------------|---------|---------------------|
-| TLI-001 | The Payment domain guarantees all transactions reference valid non-expired payment methods.            | Payment | N001, N004, N007    |
+| ID      | Statement                                                                                              | Domain  | Composed From    | File                                                |
+|---------|--------------------------------------------------------------------------------------------------------|---------|------------------|-----------------------------------------------------|
+| TLI-001 | The Payment domain guarantees all transactions reference valid non-expired payment methods.            | Payment | N001, N004, N007 | [[claims/payment-tli-payment-valid-instruments]]    |
+
+## Implicit Claims
+
+| ID   | Statement                                                                          | Domain  | Origin |
+|------|------------------------------------------------------------------------------------|---------|--------|
+| I001 | A payment gateway timeout bound MUST exist for retry logic to be valid.            | Payment | PaymentService.retryTemplate / line 62 |
+| I002 | A caller MUST set order status to ACKNOWLEDGED before invoking fulfill().          | Order   | OrderService.fulfill() / line 91 |
+
+> ⚠️ All implicit claims require spec owner confirmation before use.
+
+## TIL
+
+| ID      | Domain  | Statement                                                                | File                                                    |
+|---------|---------|--------------------------------------------------------------------------|---------------------------------------------------------|
+| TIL-001 | Payment | Atomicity and idempotency form a complementary write-lifecycle pair.     | [[claims/payment-til-atomicity-idempotency-pair]]       |
 
 ## Dependency Graph
 
@@ -166,7 +231,7 @@ TLI-001 ← N001, N004, N007
 
 ## Node Note
 
-Created at: `claims/node-{slug}.md`
+Created at: `claims/{domain}-{type3}-{slug}.md`
 
 Each node is a **standalone normalized constraint statement** — one atomic claim,
 traceable to its source, typed, domain-scoped, and carrying enough context to
@@ -185,7 +250,7 @@ modal: {MUST|MUST NOT|SHOULD|MAY}
 entity_domain: {DomainName}
 semantic_flags: [{idempotent|atomic|immutable|ordered|bounded}]
 system: {system}
-source: "[[claims/{system}-claims-index]]"
+source: "[[claims/{system}-idx]]"
 seam_constraint: false
 added: {YYYY-MM-DD}
 ---
@@ -278,7 +343,7 @@ modal: MUST
 entity_domain: Payment
 semantic_flags: [atomic]
 system: payment-service
-source: "[[claims/payment-service-claims-index]]"
+source: "[[claims/payment-service-idx]]"
 seam_constraint: false
 added: 2026-02-22
 ---
@@ -306,7 +371,7 @@ leave the system in an inconsistent state that cannot be automatically recovered
 
 | Property | Meaning in this context |
 |---|---|
-| atomic | `@Transactional` on `createOrderWithPayment()` — both inserts commit together or both roll back. Removing the annotation silently allows partial writes. |
+| atomic | `@Transactional` on `createOrderWithPayment()` — both inserts commit together or both roll back. Removing the annotation silently allows partial writes with no runtime error. |
 
 ## Dependencies
 
@@ -324,7 +389,7 @@ None
 
 ## Seam Constraint Note
 
-Created at: `claims/seam-{slug}.md`
+Created at: `claims/{domain_a}-sea-{slug}.md`
 
 A seam constraint governs the **relationship between entity classes from two different domains**.
 It is owned by neither domain. It is the first thing that breaks under independent domain evolution.
@@ -342,7 +407,7 @@ modal: {MUST|MUST NOT}
 domain_a: {DomainName}
 domain_b: {DomainName}
 system: {system}
-source: "[[claims/{system}-claims-index]]"
+source: "[[claims/{system}-idx]]"
 added: {YYYY-MM-DD}
 ---
 
@@ -394,7 +459,7 @@ modal: MUST
 domain_a: Order
 domain_b: Payment
 system: payment-service
-source: "[[claims/payment-service-claims-index]]"
+source: "[[claims/payment-service-idx]]"
 added: 2026-02-22
 ---
 
@@ -407,7 +472,7 @@ added: 2026-02-22
 
 **Order** → **Payment**
 
-An Order entity class holds a reference to a PaymentMethod entity class.
+An Order entity class holds a foreign reference to a PaymentMethod entity class.
 The dependency is unidirectional — Order depends on Payment, not the reverse.
 
 ## Sources
@@ -426,8 +491,8 @@ charge time, leaving the order in an unrecoverable PENDING state."
 
 ## Dependencies
 
-[[claims/node-order-requires-valid-payment]] (N002)
-[[claims/node-payment-method-not-expired]] (N001)
+[[claims/order-inv-order-requires-valid-payment]] (N002)
+[[claims/payment-inv-payment-method-not-expired]] (N001)
 
 ---
 *Extracted from: PaymentService.md — 2026-02-22*
@@ -437,7 +502,7 @@ charge time, leaving the order in an unrecoverable PENDING state."
 
 ## Top-Level Invariant Note
 
-Created at: `claims/tli-{slug}.md`
+Created at: `claims/{domain}-tli-{slug}.md`
 
 A top-level invariant is a **system contract composed bottom-up from a cluster of nodes**.
 It is the claim you would put in an SLA, an acceptance criterion, or an architecture decision record.
@@ -453,7 +518,7 @@ type: tli
 domain: {DomainName}
 system: {system}
 composed_from: [{N###}, {N###}, {SC###}]
-source: "[[claims/{system}-claims-index]]"
+source: "[[claims/{system}-idx]]"
 added: {YYYY-MM-DD}
 ---
 
@@ -470,9 +535,9 @@ added: {YYYY-MM-DD}
 
 | Node | Statement |
 |------|-----------|
-| [[claims/node-{slug}]] (N###) | {statement} |
-| [[claims/node-{slug}]] (N###) | {statement} |
-| [[claims/seam-{slug}]] (SC###) | {statement} |
+| [[claims/{domain}-{type3}-{slug}]] (N###) | {statement} |
+| [[claims/{domain}-{type3}-{slug}]] (N###) | {statement} |
+| [[claims/{domain_a}-sea-{slug}]] (SC###) | {statement} |
 
 ## What This Guarantees
 
@@ -501,15 +566,15 @@ type: tli
 domain: Payment
 system: payment-service
 composed_from: [N001, N004, N007]
-source: "[[claims/payment-service-claims-index]]"
+source: "[[claims/payment-service-idx]]"
 added: 2026-02-22
 ---
 
 # Payment Domain Guarantees Valid Non-Expired Transaction Instruments
 
 > **The Payment domain guarantees that all transactions reference
-> valid, non-expired payment methods, established atomically at create time,
-> and are safe to retry without side effects.**
+> valid, non-expired payment methods, are committed atomically, and are safe
+> to retry without side effects.**
 
 ## Domain
 
@@ -519,9 +584,9 @@ added: 2026-02-22
 
 | Node | Statement |
 |------|-----------|
-| [[claims/node-payment-method-not-expired]] (N001) | A payment method MUST NOT be expired. |
-| [[claims/node-transaction-atomic]] (N004) | A transaction MUST be atomic. |
-| [[claims/node-retry-idempotent]] (N007) | A retry operation MUST be idempotent. |
+| [[claims/payment-inv-payment-method-not-expired]] (N001) | A payment method MUST NOT be expired. |
+| [[claims/payment-inv-transaction-atomic]] (N004)         | A transaction MUST be atomic. |
+| [[claims/payment-inv-retry-idempotent]] (N007)           | A retry operation MUST be idempotent. |
 
 ## What This Guarantees
 
@@ -537,6 +602,200 @@ order and payment out of sync, or a non-idempotent retry causing duplicate charg
 
 ---
 *Composed from: PaymentService.md — 2026-02-22*
+```
+
+---
+
+## Implicit Claim Note
+
+Created at: `claims/{domain}-imp-{slug}.md`
+
+An implicit claim is a **condition the spec or code assumes but never states**.
+It is extracted, stored, and flagged — but MUST NOT be used in derivations or promoted
+to an explicit node until a spec owner confirms it.
+
+```markdown
+---
+id: {I###}
+tags:
+  - claims/implicit
+  - system/{system}
+  - domain/{entity-domain}
+type: implicit
+entity_domain: {DomainName}
+system: {system}
+source: "[[claims/{system}-idx]]"
+implicit: true
+confirmed: false
+attention_required: true
+added: {YYYY-MM-DD}
+---
+
+# {Title}
+
+> **{Single normalized statement of the assumed condition.
+> Active voice. Present tense. Controlled vocabulary.}**
+
+## Domain
+
+**{EntityDomain}** — {which entity class or component this assumption is about}
+
+## Origin
+
+`{precise source pointer where the assumption surfaces in code or spec}`
+
+{1-2 sentences describing what in the source implied this condition.}
+
+## Attention Required
+
+{What must be confirmed. What breaks if this assumption is wrong.
+Who needs to sign off — spec owner, domain team, or architect.}
+
+## Related Nodes
+
+{Wikilinks to explicit nodes that depend on or relate to this assumption, or "None"}
+
+---
+*Implicit claim — unconfirmed. Extracted from: {source title} — {YYYY-MM-DD}*
+```
+
+**Real example:**
+
+```markdown
+---
+id: I001
+tags:
+  - claims/implicit
+  - system/payment-service
+  - domain/Payment
+type: implicit
+entity_domain: Payment
+system: payment-service
+source: "[[claims/payment-service-idx]]"
+implicit: true
+confirmed: false
+attention_required: true
+added: 2026-02-22
+---
+
+# Payment Gateway Timeout Bound Must Exist
+
+> **A payment gateway timeout bound MUST exist for retry logic to be valid.**
+
+## Domain
+
+**Payment** — assumption about the PaymentGateway interface contract.
+
+## Origin
+
+`PaymentService.retryTemplate / line 62`
+
+The retry template calls `paymentGateway.charge(request)` with a bounded retry count,
+but neither the spec nor the interface declaration states what timeout governs
+each attempt. The retry logic is only correct if a timeout exists.
+
+## Attention Required
+
+Without a defined timeout, the retry loop may block indefinitely on a slow gateway
+response, defeating both the retry bound and the idempotency guarantee.
+
+Spec owner must: state the per-attempt timeout, or confirm it is delegated entirely
+to the gateway's own SLA and document that reference.
+
+## Related Nodes
+
+[[claims/payment-inv-retry-idempotent]] (N007)
+
+---
+*Implicit claim — unconfirmed. Extracted from: PaymentService.md — 2026-02-22*
+```
+
+---
+
+## TIL Note
+
+Created at: `claims/{domain}-til-{slug}.md`
+
+A TIL note captures an **architectural observation discovered during analysis** — a non-obvious
+pattern, a surprising design decision, or a relationship between constraints that is worth
+preserving for the team. TIL notes are not constraints and have no normative effect.
+
+```markdown
+---
+id: {TIL-###}
+tags:
+  - claims/til
+  - system/{system}
+  - domain/{domain}
+type: til
+domain: {DomainName}
+system: {system}
+source: "[[claims/{system}-idx]]"
+added: {YYYY-MM-DD}
+---
+
+# {Title}
+
+> **{One-sentence crisp claim — the distilled insight.}**
+
+## Observation
+
+{1-3 sentences expanding on the statement — context, consequence, or evidence from the source.}
+
+## Origin
+
+`{precise source pointer where this was noticed}`
+
+## Related Nodes
+
+{Wikilinks to nodes this relates to, or "None"}
+
+---
+*TIL — Extracted from: {source title} — {YYYY-MM-DD}*
+```
+
+**Real example:**
+
+```markdown
+---
+id: TIL-001
+tags:
+  - claims/til
+  - system/payment-service
+  - domain/Payment
+type: til
+domain: Payment
+system: payment-service
+source: "[[claims/payment-service-idx]]"
+added: 2026-02-22
+---
+
+# Atomicity and Idempotency Form a Complementary Write-Lifecycle Pair
+
+> **Atomicity (N004) and idempotency (N011) together protect the full write lifecycle —
+> neither alone is sufficient.**
+
+## Observation
+
+Atomicity prevents partial writes on the first attempt: if the Order insert succeeds
+but the Transaction insert fails, the transaction rolls back both. Idempotency prevents
+double-writes on retry: if the first attempt succeeds but the network response is lost,
+retrying is safe. Remove either constraint and a failure window opens that the other
+cannot close.
+
+## Origin
+
+`§3.1 (atomicity) + §3.2 (idempotency)` — the two constraints appear in adjacent sections
+without the spec explicitly connecting them. The relationship only becomes visible when
+you model both failure modes side by side.
+
+## Related Nodes
+
+[[claims/payment-inv-transaction-atomic]] (N004)
+[[claims/payment-inv-retry-idempotent]] (N007)
+
+---
+*TIL — Extracted from: PaymentService.md — 2026-02-22*
 ```
 
 ---
@@ -561,8 +820,8 @@ system:
   - payment-service      ← original
   - checkout-api         ← added on merge
 sources:
-  - "[[claims/payment-service-claims-index]]"
-  - "[[claims/checkout-api-claims-index]]"
+  - "[[claims/payment-service-idx]]"
+  - "[[claims/checkout-api-idx]]"
 added: 2026-01-10
 updated: 2026-02-22
 ---
@@ -596,7 +855,7 @@ None
 ### Accumulation Rules
 
 - Convert `system: "single-value"` to `system: [array]` when a second system is added
-- Convert `source:` to `sources:` array — keep all backlinks
+- Convert `source:` to `sources:` array — keep all backlinks; update to `{system}-idx` format
 - Add `updated:` to frontmatter
 - Append `## Additional Context ({system}, {YYYY-MM-DD})` before the final footer — never overwrite
 - If the new source **contradicts** the existing statement → do NOT merge → flag as `CONFLICT` → stop
@@ -611,11 +870,11 @@ A conflict entry is appended to the index of the newer source:
 ```markdown
 ## Unresolved Conflicts
 
-### ⚡ N-NEW-007 vs [[claims/node-payment-method-validity]]
+### ⚡ N-NEW-007 vs [[claims/payment-inv-payment-method-validity]]
 
 | | Statement |
 |---|---|
-| **Existing** (`node-payment-method-validity.md`) | "A payment method MUST be validated on every order." |
+| **Existing** (`payment-inv-payment-method-validity.md`) | "A payment method MUST be validated on every order." |
 | **New** (`checkout-api spec`) | "A payment method MUST be validated on create only." |
 
 **Action required:** Validation timing is a security and performance boundary decision.
@@ -632,27 +891,31 @@ Confirm with the payments team; update the winning node's statement and re-run.
 
 **Creates:**
 
-1. `claims/payment-service-claims-index.md` (index)
-2. `claims/node-payment-method-not-expired.md` (invariant, Payment)
-3. `claims/node-order-requires-valid-payment.md` (invariant, Order)
-4. `claims/node-order-requires-auth-user.md` (invariant, Order)
-5. `claims/node-transaction-atomic.md` (invariant, Payment — semantic flag: atomic)
-6. `claims/node-refund-references-transaction.md` (invariant, Payment)
-7. `claims/node-session-single-identity.md` (constraint, Identity)
-8. `claims/node-retry-idempotent.md` (invariant, Payment — semantic flag: idempotent)
-9. `claims/node-acknowledgment-precedes-fulfill.md` (invariant, Order — semantic flag: ordered)
-10. `claims/seam-order-payment-method-ref.md` (seam, Order ↔ Payment)
-11. `claims/tli-payment-valid-instruments.md` (top-level invariant, Payment)
+1. `claims/payment-service-idx.md` (index)
+2. `claims/payment-inv-payment-method-not-expired.md` (invariant, Payment)
+3. `claims/order-inv-order-requires-valid-payment.md` (invariant, Order)
+4. `claims/order-inv-order-requires-auth-user.md` (invariant, Order)
+5. `claims/payment-inv-transaction-atomic.md` (invariant, Payment — semantic flag: atomic)
+6. `claims/payment-inv-refund-references-transaction.md` (invariant, Payment)
+7. `claims/identity-inv-session-single-identity.md` (invariant, Identity)
+8. `claims/payment-inv-retry-idempotent.md` (invariant, Payment — semantic flag: idempotent)
+9. `claims/order-inv-acknowledgment-precedes-fulfill.md` (invariant, Order — semantic flag: ordered)
+10. `claims/order-sea-order-payment-method-ref.md` (seam, Order ↔ Payment)
+11. `claims/payment-tli-payment-valid-instruments.md` (top-level invariant, Payment)
+12. `claims/order-der-order-requires-auth-and-payment.md` (derived, Order)
+13. `claims/payment-imp-payment-gateway-timeout-bound.md` (implicit, Payment — REQUIRES_ATTENTION)
+14. `claims/order-imp-acknowledged-state-caller-contract.md` (implicit, Order — REQUIRES_ATTENTION)
+15. `claims/payment-til-atomicity-idempotency-pair.md` (TIL, Payment)
 
 **Merges into:**
 
-12. `claims/node-session-single-identity.md` — adds Blitz PublicData session context from prior run
+16. `claims/identity-inv-session-single-identity.md` — adds Blitz PublicData session context from prior run
 
 **Flags (not written):**
 
-13. `node-validation-limit-override.md` — MODAL_UNRESOLVED: "can override" is MUST or MAY?
-14. `node-validation-limit-override.md` — UNDEFINED_TERM: "validation limit" undefined in spec
+17. `payment-cnd-validation-limit-override` — MODAL_UNRESOLVED: "can override" is MUST or MAY?
+18. `payment-cnd-validation-limit-override` — UNDEFINED_TERM: "validation limit" undefined in spec
 
 **Conflicts (not written):**
 
-15. `node-payment-method-validity.md` — CONFLICT: validated on every order vs validated on create only
+19. `payment-inv-payment-method-validity.md` — CONFLICT: validated on every order vs validated on create only

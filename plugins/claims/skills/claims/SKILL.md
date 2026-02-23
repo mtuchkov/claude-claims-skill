@@ -593,6 +593,59 @@ Circular references are real and meaningful — flag as `[CIRCULAR DEPENDENCY]`,
 
 ---
 
+## Step 8a: Extract Implicit Claims
+
+After deriving explicit first-order nodes, make a dedicated pass over `CONTENT` to surface
+**implicit claims** — conditions the spec or code assumes but never states.
+
+Look for:
+- Guard clauses whose precondition is never documented in the spec
+- Error types selected for behavioral reasons that are never spelled out (security, UX, conceal)
+- Data shapes accessed or mutated without a declared schema or ownership rule
+- Annotations/decorators whose behavioral contract is applied but not defined
+- Examples that presuppose a rule for which no explicit node exists
+- Retry or timeout sites where the required idempotency/bound is implied but unwritten
+- Cross-service calls where the caller assumes a contract the provider never published
+
+For each implicit claim found:
+
+```
+I{n}  ORIGIN:    {precise source pointer where the assumption surfaces}
+      STATEMENT: "{what must be true for the code or spec to be valid}"
+      DOMAIN:    {domain of the entity class being assumed about}
+      FLAGS:     [IMPLICIT] [REQUIRES_ATTENTION]
+      CONFIRMED: false
+```
+
+Add each to `EXTRACTION.implicit_claims`.
+
+**Inviolable:** An implicit claim MUST NOT be merged into, treated as, or used to derive
+explicit nodes until a spec owner confirms it. Confirmed: false means no downstream effect.
+
+---
+
+## Step 8b: Capture TIL
+
+Identify architectural observations that emerge from reading the source — non-obvious patterns,
+surprising design decisions, or relationships that are not constraints themselves but are worth
+preserving for the team.
+
+Capture only what was genuinely discovered by reading this source. Do not restate explicit nodes.
+
+For each TIL:
+
+```
+TIL-{n}  DOMAIN:      {domain most relevant to the observation}
+         STATEMENT:   "{one-sentence crisp claim — the distilled insight}"
+         OBSERVATION: "{1-3 sentences expanding on the statement — context, consequence, or evidence}"
+         ORIGIN:      {source location where it was noticed}
+         NODES:       {node IDs this relates to, if any}
+```
+
+Add each to `EXTRACTION.til`.
+
+---
+
 ## Step 9: Scope
 
 Confirm or reject domain assignments. All nodes must carry a domain before dedup.
@@ -638,6 +691,21 @@ Assign exactly one modal to every node:
 | `soft` | SHOULD | Strong preference, exceptions acknowledged |
 | `conditional` | MUST (when X) | Holds only when a stated predicate is true |
 | `permission` | MAY | Permitted but not required |
+
+**3-letter type codes** — used in file names:
+
+| Code | Type |
+|------|------|
+| `inv` | invariant |
+| `exc` | exclusion |
+| `sft` | soft |
+| `cnd` | conditional |
+| `prm` | permission |
+| `sea` | seam |
+| `der` | derived |
+| `tli` | top-level invariant |
+| `imp` | implicit |
+| `til` | TIL |
 
 If the source is ambiguous between MUST and SHOULD, flag `[MODAL UNRESOLVED]` for spec owner.
 Do not resolve by assumption.
@@ -718,6 +786,8 @@ Produce this structure:
       ],
       "semantic_flags": ["idempotent", "atomic"],
       "rationale": "Verbatim rationale prose from spec, for reference only.",
+      "derived": false,
+      "trace": null,
       "depends_on": ["N003"],
       "flags": []
     }
@@ -757,11 +827,34 @@ Produce this structure:
       "description": "N003 and N011 assert mutually exclusive predicates for PaymentMethod.",
       "status": "UNRESOLVED"
     }
+  ],
+  "implicit_claims": [
+    {
+      "id": "I001",
+      "statement": "Single normalized declarative sentence of the assumed condition.",
+      "entity_domain": "DomainName",
+      "origin": "PaymentService.retryTemplate / line 62",
+      "confirmed": false,
+      "flags": ["IMPLICIT", "REQUIRES_ATTENTION"]
+    }
+  ],
+  "til": [
+    {
+      "id": "TIL-001",
+      "domain": "Payment",
+      "statement": "One-sentence crisp distilled insight.",
+      "observation": "1-3 sentences expanding on the statement.",
+      "origin": "PaymentService.createOrderWithPayment() / line 47",
+      "nodes": ["N004", "N006"]
+    }
   ]
 }
 ```
 
-Store result in `EXTRACTION`.
+**After building the structure, append every derived node from Step 8 into `EXTRACTION.nodes`**
+with `"derived": true` and `"trace": "{N1} AND {N3} stated together in {source pointer}"`.
+Derived nodes (D-prefix) flow through Steps 15–18 exactly like extracted nodes.
+Without this step they will not be deduplicated or written as files.
 
 ---
 
@@ -801,6 +894,8 @@ Extracted {N} constraint nodes from "{TITLE}" ({SYSTEM}):
 Domains identified:     {list}
 Seam constraints:       {X}
 Top-level invariants:   {Y}
+Implicit claims:        {Z} ⚠️ REQUIRES_ATTENTION
+TIL:                    {W} observations captured
 
 CREATE    {A} new node files
 MERGE     {B} existing node files
@@ -812,9 +907,10 @@ Flags requiring spec owner action:
   [DOMAIN_UNRESOLVED]  {n} nodes
   [MODAL_UNRESOLVED]   {n} nodes
   [CIRCULAR_DEP]       {n} cycles
+  [IMPLICIT]           {n} unconfirmed implicit claims
 
 Contradiction details:
-  ⚡ N-NEW-008 vs claims/node-payment-method-validity.md
+  ⚡ N-NEW-008 vs {domain}-inv-payment-method-validity.md
      New:      "A PaymentMethod MUST be validated on every order."
      Existing: "A PaymentMethod MUST be validated on create only."
      → Resolve before ingesting.
@@ -826,7 +922,7 @@ Contradiction details:
 
 ## Step 17: Create Source Index File
 
-Create `{OUTPUT_DIR}/{SYSTEM}-claims-index.md`:
+Create `{OUTPUT_DIR}/{SYSTEM}-idx.md`:
 
 ```markdown
 ---
@@ -849,21 +945,35 @@ spec_file: "{original_filename}"
 
 ## Node Registry
 
-| ID    | Title   | Type      | Domain   | File                     |
-|-------|---------|-----------|----------|--------------------------|
-| N001  | {title} | {type}    | {domain} | [[claims/node-{slug}]]   |
+| ID    | Title   | Type      | Domain   | File                                          |
+|-------|---------|-----------|----------|-----------------------------------------------|
+| N001  | {title} | {type}    | {domain} | [[claims/{domain_lower}-{type3}-{name}]]      |
 
 ## Seam Constraints
 
-| ID    | Statement | Domain A | Domain B |
-|-------|-----------|----------|----------|
-| SC001 | {stmt}    | {a}      | {b}      |
+| ID    | Statement | Domain A | Domain B | File                                            |
+|-------|-----------|----------|----------|-------------------------------------------------|
+| SC001 | {stmt}    | {a}      | {b}      | [[claims/{domain_a_lower}-sea-{name}]]          |
 
 ## Top-Level Invariants
 
-| ID      | Statement | Domain |
-|---------|-----------|--------|
-| TLI-001 | {stmt}    | {dom}  |
+| ID      | Statement | Domain | File                                          |
+|---------|-----------|--------|-----------------------------------------------|
+| TLI-001 | {stmt}    | {dom}  | [[claims/{domain_lower}-tli-{name}]]          |
+
+## Implicit Claims
+
+| ID   | Statement | Domain | Origin |
+|------|-----------|--------|--------|
+| I001 | {stmt}    | {dom}  | {where it was implied} |
+
+> ⚠️ All implicit claims require spec owner confirmation before use.
+
+## TIL
+
+| ID      | Domain | Statement | File                                          |
+|---------|--------|-----------|-----------------------------------------------|
+| TIL-001 | {dom}  | {stmt}    | [[claims/{domain_lower}-til-{name}]]          |
 
 ## Dependency Graph
 
@@ -881,7 +991,7 @@ N004 → SC001
 
 ## Unresolved Conflicts
 
-### ⚡ N-NEW-{n} vs [[claims/node-{existing-slug}]]
+### ⚡ N-NEW-{n} vs [[claims/{domain_lower}-{type3}-{existing-name}]]
 
 | | Statement |
 |---|---|
@@ -900,7 +1010,15 @@ N004 → SC001
 
 ## Step 18: Create New Node Files
 
-For each `CREATE_NEW` node, create `{OUTPUT_DIR}/node-{slug}.md`:
+For each `CREATE_NEW` node, create `{OUTPUT_DIR}/{entity_domain_lower}-{type3}-{name}.md`.
+
+Use the 3-letter type code from the type code table.
+For seam constraints use `{domain_a_lower}-sea-{name}.md`.
+For derived nodes use `{entity_domain_lower}-der-{name}.md`.
+For implicit claims use `{entity_domain_lower}-imp-{name}.md`.
+For TIL files use `{domain_lower}-til-{name}.md`.
+
+**Node / Derived node template:**
 
 ```markdown
 ---
@@ -913,8 +1031,10 @@ type: {type}
 modal: {MUST|MUST NOT|SHOULD|MAY}
 entity_domain: {domain}
 system: {SYSTEM}
-source: "[[claims/{SYSTEM}-claims-index]]"
+source: "[[claims/{SYSTEM}-idx]]"
 seam_constraint: {true|false}
+derived: {true|false}
+trace: "{N1} AND {N3} stated together in {source pointer} | null if not derived"
 added: {YYYY-MM-DD}
 ---
 
@@ -930,6 +1050,7 @@ added: {YYYY-MM-DD}
 ## Sources
 
 {sources as list with section and line references}
+{if derived: "Derived from: {trace}"}
 
 ## Rationale
 
@@ -944,7 +1065,87 @@ added: {YYYY-MM-DD}
 {flags, or "None"}
 
 ---
-*Extracted from: {TITLE} — {YYYY-MM-DD}*
+*{if derived: "Derived from: {trace} — " else "Extracted from: "}{TITLE} — {YYYY-MM-DD}*
+```
+
+**Implicit claim template** (`{domain_lower}-imp-{name}.md`):
+
+```markdown
+---
+id: {I###}
+tags:
+  - claims/implicit
+  - system/{SYSTEM}
+  - domain/{entity_domain}
+type: implicit
+entity_domain: {domain}
+system: {SYSTEM}
+source: "[[claims/{SYSTEM}-idx]]"
+implicit: true
+confirmed: false
+attention_required: true
+added: {YYYY-MM-DD}
+---
+
+# {title}
+
+> **{statement}**
+
+## Domain
+
+{entity_domain}
+
+## Origin
+
+{precise source pointer where the assumption surfaces}
+
+## Attention Required
+
+{What must be confirmed. What breaks if this assumption is wrong.
+Who needs to sign off — spec owner, domain team, or architect.}
+
+## Related Nodes
+
+{wikilinks to explicit nodes that depend on or relate to this assumption, or "None"}
+
+---
+*Implicit claim — unconfirmed. Extracted from: {TITLE} — {YYYY-MM-DD}*
+```
+
+**TIL template** (`{domain_lower}-til-{name}.md`):
+
+```markdown
+---
+id: {TIL-###}
+tags:
+  - claims/til
+  - system/{SYSTEM}
+  - domain/{domain}
+type: til
+domain: {domain}
+system: {SYSTEM}
+source: "[[claims/{SYSTEM}-idx]]"
+added: {YYYY-MM-DD}
+---
+
+# {title}
+
+> **{statement}**
+
+## Observation
+
+{1-3 sentences expanding on the statement — context, consequence, or evidence from the source.}
+
+## Origin
+
+{precise source pointer where this was noticed}
+
+## Related Nodes
+
+{wikilinks to nodes this relates to, or "None"}
+
+---
+*TIL — Extracted from: {TITLE} — {YYYY-MM-DD}*
 ```
 
 ---
@@ -977,21 +1178,31 @@ For each `MERGE` node:
 ```
 === Constraint Graph Complete ({SYSTEM}) ===
 
-Index:          {SYSTEM}-claims-index.md
-Domains:        {list}
-Seam Constraints:    {X} (see index)
+Index:                {SYSTEM}-idx.md
+Domains:              {list}
+Seam Constraints:     {X} (see index)
 Top-Level Invariants: {Y}
 
-Created:    {A} node files
-Merged:     {B} node files
-Conflicts:  {C} (see index — unresolved, files NOT written)
-Skipped:    {D} duplicates
+Created:          {A} node files
+Merged:           {B} node files
+Conflicts:        {C} (see index — unresolved, files NOT written)
+Skipped:          {D} duplicates
+Implicit claims:  {E} files (⚠️ REQUIRES_ATTENTION — unconfirmed)
+TIL:              {F} files
 
 ⚡ UNRESOLVED CONFLICTS — action required:
   {list each conflict with both statements}
 
 🚩 OPEN FLAGS — spec owner action required:
   {list each flag with description}
+
+⚠️ IMPLICIT CLAIMS — confirmation required:
+  {I-ID} [{domain}] {statement}
+    Origin: {source pointer}
+    → {what needs to be confirmed}
+
+💡 TIL:
+  {TIL-ID} [{domain}] {statement}
 
 📋 Full Node Registry:
 ────────────────────────────────────────
@@ -1014,16 +1225,18 @@ Skipped:    {D} duplicates
 These rules apply at every phase. Any output that violates them is incorrect.
 
 ```
-1. No node without a source citation.
-2. No edge without an explicit logical basis in the source.
-3. No inference beyond what the spec or code states.
-4. No assumption silently promoted to constraint.
-5. No gap auto-resolved — every unknown is a visible flag.
-6. No banned adverb survives normalization.
-7. No domain assignment by flow, section, or actor — only by entity class.
-8. No dedup across different entity domains.
-9. No conflict auto-resolved — conflicts are artifacts, not obstacles.
+1.  No node without a source citation.
+2.  No edge without an explicit logical basis in the source.
+3.  No inference beyond what the spec or code states.
+4.  No assumption silently promoted to constraint.
+5.  No gap auto-resolved — every unknown is a visible flag.
+6.  No banned adverb survives normalization.
+7.  No domain assignment by flow, section, or actor — only by entity class.
+8.  No dedup across different entity domains.
+9.  No conflict auto-resolved — conflicts are artifacts, not obstacles.
 10. No implied constraint — only explicit semantics from the source.
+11. No implicit claim promoted to a node or used in derivation until confirmed: true
+    is set by a spec owner. confirmed: false means zero downstream effect.
 ```
 
 ---
@@ -1034,7 +1247,7 @@ If `mcp__qmd__vsearch` is not available:
 
 1. Fall back to filename matching:
    ```bash
-   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from node title}"
+   ls {OUTPUT_DIR}/ 2>/dev/null | grep -i "{keywords from node title or domain}"
    ```
 2. If similar filename found, read it and do manual comparison.
 3. Otherwise, create new file.
@@ -1063,17 +1276,31 @@ Identified domains: Payment, Order, Identity
 
 Extracted 11 constraint nodes:
 
- 1. payment-method-requires-non-expired      (invariant)    [Payment]
- 2. order-requires-valid-payment-method      (invariant)    [Order]
- 3. order-requires-authenticated-user        (invariant)    [Order]
- 4. transaction-must-be-atomic               (invariant)    [Payment]
- 5. refund-references-existing-transaction   (invariant)    [Payment]
- 6. session-scoped-to-one-identity           (constraint)   [Identity]
- 7. payment-method-validated-on-create       (postcondition)[Payment]
- 8. order-payment-method-seam               (seam)         [Order ↔ Payment]
- 9. admin-may-override-validation-limit      (permission)   [Payment]
-10. acknowledgment-must-precede-fulfillment  (invariant)    [Order]
-11. retry-must-be-idempotent                 (invariant)    [Payment]
+ 1. payment-method-requires-non-expired      (inv)   [Payment]
+ 2. order-requires-valid-payment-method      (inv)   [Order]
+ 3. order-requires-authenticated-user        (inv)   [Order]
+ 4. transaction-must-be-atomic               (inv)   [Payment]
+ 5. refund-references-existing-transaction   (inv)   [Payment]
+ 6. session-scoped-to-one-identity           (inv)   [Identity]
+ 7. payment-method-validated-on-create       (cnd)   [Payment]
+ 8. order-payment-method-seam                (sea)   [Order ↔ Payment]
+ 9. admin-may-override-validation-limit      (prm)   [Payment]
+10. acknowledgment-must-precede-fulfillment  (inv)   [Order]
+11. retry-must-be-idempotent                 (inv)   [Payment]
+
+Extracting implicit claims...
+  I001 [IMPLICIT] [Payment] — PaymentGateway.charge() has no documented timeout bound;
+       the retry site assumes one exists but the spec never states it.
+       Origin: PaymentService.retryTemplate / line 62
+  I002 [IMPLICIT] [Order]   — OrderService.fulfill() assumes ACKNOWLEDGED status is always
+       set by a prior caller; no contract documents which component is responsible.
+       Origin: OrderService.fulfill() / line 91
+  2 implicit claims flagged — REQUIRES_ATTENTION
+
+Capturing TIL...
+  TIL-001 [Payment] — Atomicity and idempotency form a complementary write-lifecycle pair.
+          N004 prevents partial writes on first attempt; N011 prevents double-writes on retry.
+          Neither alone is sufficient. Origin: §3.1 + §3.2
 
 Flags:
   [UNDEFINED_TERM]     N009 — "validation limit" undefined in spec
@@ -1081,11 +1308,11 @@ Flags:
 
 Checking for semantic duplicates...
   ✓ payment-method-requires-non-expired   → no similar nodes
-  ✓ order-requires-valid-payment-method   → found: node-order-payment-check.md (0.84)
+  ✓ order-requires-valid-payment-method   → found: order-inv-order-payment-check.md (0.84)
     → Same predicate, same domain
     → New source adds §4.2 reference
     → Will merge
-  ✗ payment-method-validated-on-create    → found: node-payment-method-validity.md (0.91)
+  ✗ payment-method-validated-on-create    → found: payment-inv-payment-method-validity.md (0.91)
     → CONFLICT: existing says "validated on every order"
                 new spec says "validated on create only"
     → Flagged — file NOT written
@@ -1099,18 +1326,20 @@ Creating files...
 
 === Constraint Graph Complete (payment-service) ===
 
-Index:               payment-service-claims-index.md
-Domains:             Payment, Order, Identity
-Seam Constraints:    1
+Index:                payment-service-idx.md
+Domains:              Payment, Order, Identity
+Seam Constraints:     1
 Top-Level Invariants: 1
 
-Created:    9 node files
-Merged:     1 node file
-Conflicts:  1 (see index — unresolved, file NOT written)
-Skipped:    0
+Created:          9 node files
+Merged:           1 node file
+Conflicts:        1 (see index — unresolved, file NOT written)
+Skipped:          0
+Implicit claims:  2 files (⚠️ REQUIRES_ATTENTION)
+TIL:              1 file
 
 ⚡ UNRESOLVED CONFLICTS — action required:
-  node-payment-method-validity.md vs N007
+  payment-inv-payment-method-validity.md vs N007
     Existing: "A PaymentMethod MUST be validated on every order."
     New spec:  "A PaymentMethod MUST be validated on create only."
     → Validation timing is a security and performance boundary decision.
@@ -1120,17 +1349,29 @@ Skipped:    0
   FLAG-001 [UNDEFINED_TERM]    N009 — "validation limit" has no definition in spec
   FLAG-002 [MODAL_UNRESOLVED]  N009 — source says "can override"; MUST or MAY?
 
+⚠️ IMPLICIT CLAIMS — confirmation required:
+  I001 [Payment] A payment gateway timeout bound MUST exist for retry logic to be valid.
+    Origin: PaymentService.retryTemplate / line 62
+    → Spec owner must state the bound or confirm it is delegated to the gateway contract.
+  I002 [Order] A caller MUST set order status to ACKNOWLEDGED before invoking fulfill().
+    Origin: OrderService.fulfill() / line 91
+    → Confirm which component owns the ACKNOWLEDGED transition and document it.
+
+💡 TIL:
+  TIL-001 [Payment] Atomicity (N004) and idempotency (N011) form a complementary
+                    write-lifecycle pair — neither alone is sufficient.
+
 📋 Full Node Registry:
 ────────────────────────────────────────
-N001 [invariant]    [Payment]  A payment method MUST NOT be expired.
-N002 [invariant]    [Order]    An order MUST require a valid payment method.
-N003 [invariant]    [Order]    An order MUST require an authenticated user.
-N004 [invariant]    [Payment]  A transaction MUST be atomic.
-N005 [invariant]    [Payment]  A refund MUST reference an existing transaction.
-N006 [constraint]   [Identity] A session MUST be scoped to exactly one identity at a time.
-N008 [seam]         [Order↔Payment] An order MUST reference a payment method that satisfies Payment domain invariants.
-N010 [invariant]    [Order]    An acknowledgment MUST precede order fulfillment.
-N011 [invariant]    [Payment]  A retry operation MUST be idempotent.
+N001 [inv]    [Payment]  A payment method MUST NOT be expired.
+N002 [inv]    [Order]    An order MUST require a valid payment method.
+N003 [inv]    [Order]    An order MUST require an authenticated user.
+N004 [inv]    [Payment]  A transaction MUST be atomic.
+N005 [inv]    [Payment]  A refund MUST reference an existing transaction.
+N006 [inv]    [Identity] A session MUST be scoped to exactly one identity at a time.
+N008 [sea]    [Order↔Payment] An order MUST reference a payment method that satisfies Payment domain invariants.
+N010 [inv]    [Order]    An acknowledgment MUST precede order fulfillment.
+N011 [inv]    [Payment]  A retry operation MUST be idempotent.
 ────────────────────────────────────────
 
 📋 Top-Level Invariants:
