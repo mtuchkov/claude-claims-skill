@@ -1,4 +1,4 @@
-# Sample Claims Output
+# Sample Constraint Graph Output
 
 This shows what the `/claims` skill creates when processing a spec file.
 
@@ -6,7 +6,7 @@ This shows what the `/claims` skill creates when processing a spec file.
 
 **User input:**
 ```
-/claims ~/docs/Multitenancy.md --system blitz-multitenancy
+/claims ~/docs/PaymentService.md --system payment-service
 ```
 
 **Output:**
@@ -14,457 +14,641 @@ This shows what the `/claims` skill creates when processing a spec file.
 Reading config... vault at ~/Documents/notes
 
 Reading spec...
-Document: Multitenancy.md, ~1,800 words
+Document: PaymentService.md, ~2,400 words
 
-Analyzing and extracting design claims...
+Applying controlled vocabulary...
 
-Extracted 8 claims from "Multitenancy.md" (blitz-multitenancy):
+Extracting statements start to end...
+  §1.1  preamble — discarded
+  §2.1  formal assertion — normalized → N001
+  §2.1  formal assertion — normalized → N002
+  §2.2  rationale prose — scope signal captured → annotated N002
+  §2.3  code block — translated → N003 (ordered), N004 (atomic)
+  §3.1  formal assertion — normalized → N005
+  §3.2  code block — translated → N006 (idempotent)
+  §3.3  formal assertion — normalized → N007
+  §4.1  formal assertion — normalized → N008
+  §4.2  cross-domain relationship — normalized → SC001
+  §4.3  rationale prose — scope signal captured → annotated SC001
+  §5.1  example — implied constraint flagged → [CANDIDATE FLAG-001]
+  §5.2  formal assertion — modal ambiguous → N009 + FLAG-002
+  §5.2  undefined term → FLAG-003
 
-1. organizationid-on-every-model        (invariant)
-2. query-must-filter-by-orgid           (invariant)
-3. create-must-attach-orgid             (postcondition)
-4. update-delete-where-includes-orgid   (invariant)
-5. session-scoped-to-one-org            (constraint)
-6. entity-assigned-to-membership        (constraint)
-7. signup-creates-org-and-membership    (postcondition)
-8. superadmin-bypasses-org-filter       (guarantee)
+Normalized 9 nodes, 1 seam constraint.
+
+Running negative-to-positive pass...
+  N001: "A payment method MUST NOT be expired."              — exclusion, preserved as MUST NOT
+  N007: "No order may proceed without acknowledgment."       → "An order MUST require acknowledgment before fulfillment."
+
+Deriving first-order nodes...
+  D001 ← {N002, N003}: "An order MUST require both a valid payment method and an authenticated user."
+  D002 ← {N004, N006}: "A transaction MUST be atomic and its retry MUST be idempotent."
+
+Composing top-level invariants...
+  TLI-001 ← {N001, N004, N006}: Payment domain guarantee composed.
+
+Assigning entity domains...
+  N001 → Payment    N002 → Order     N003 → Order
+  N004 → Payment    N005 → Payment   N006 → Payment
+  N007 → Order      N008 → Order     N009 → Payment [MODAL_UNRESOLVED]
+  D001 → Order      D002 → Payment
+  SC001 → Order ↔ Payment
 
 Checking for semantic duplicates...
-  ✓ organizationid-on-every-model       → no similar claims
-  ✓ query-must-filter-by-orgid          → no similar claims
-  ✓ create-must-attach-orgid            → no similar claims
-  ✓ update-delete-where-includes-orgid  → no similar claims
-  ✓ session-scoped-to-one-org           → found: claim-session-single-context.md (0.82)
-    → New info: orgId stored in PublicData; Blitz $setPublicData switch mechanism
+  ✓ payment-method-not-expired          → no similar nodes
+  ✓ order-requires-valid-payment        → no similar nodes
+  ✓ order-requires-auth-user            → no similar nodes
+  ✓ transaction-atomic                  → no similar nodes
+  ✓ refund-references-transaction       → no similar nodes
+  ✓ retry-idempotent                    → no similar nodes
+  ✓ acknowledgment-precedes-fulfillment → no similar nodes
+  ✓ seam-order-payment-method-ref       → no similar nodes
+  ✓ session-single-identity             → found: node-session-single-context.md (0.84)
+    → Same predicate, same domain (Identity)
+    → New source adds Blitz PublicData session shape
     → Will merge
-  ✓ entity-assigned-to-membership       → no similar claims
-  ✓ signup-creates-org-and-membership   → no similar claims
-  ✗ superadmin-bypasses-org-filter      → found: claim-superadmin-access.md (0.93)
-    → CONFLICT: existing says SUPERADMIN MAY read across orgs;
-                new spec says SUPERADMIN MUST bypass filter on ALL operations
+  ✗ payment-method-validated-on-create  → found: node-payment-method-validity.md (0.91)
+    → CONFLICT: existing says "validated on every order";
+                new spec says "validated on create only"
     → Flagged — file NOT written
 
 Creating files...
 
 Created index:
-  claims/blitz-multitenancy-claims-index.md
+  claims/payment-service-claims-index.md
 
-Created 6 claim files:
-  ✓ claims/claim-organizationid-on-every-model.md
-  ✓ claims/claim-query-must-filter-by-orgid.md
-  ✓ claims/claim-create-must-attach-orgid.md
-  ✓ claims/claim-update-delete-where-includes-orgid.md
-  ✓ claims/claim-entity-assigned-to-membership.md
-  ✓ claims/claim-signup-creates-org-and-membership.md
+Created 8 node files:
+  ✓ claims/node-payment-method-not-expired.md
+  ✓ claims/node-order-requires-valid-payment.md
+  ✓ claims/node-order-requires-auth-user.md
+  ✓ claims/node-transaction-atomic.md
+  ✓ claims/node-refund-references-transaction.md
+  ✓ claims/node-retry-idempotent.md
+  ✓ claims/node-acknowledgment-precedes-fulfillment.md
+  ✓ claims/node-order-requires-auth-and-payment.md  (derived: D001)
+
+Created 1 seam constraint file:
+  ✓ claims/seam-order-payment-method-ref.md
+
+Created 1 top-level invariant file:
+  ✓ claims/tli-payment-valid-instruments.md
 
 Merged into existing:
-  ✓ claims/claim-session-single-context.md
-    Added: orgId in Blitz PublicData; $setPublicData switch; roles array shape
+  ✓ claims/node-session-single-context.md
+    Added: Blitz PublicData orgId shape; $setPublicData switch; dual-role array
 
 Skipped (conflict — not written):
-  ✗ superadmin-bypasses-org-filter → claim-superadmin-access.md
-    Reason: MAY (read-only) vs MUST (all operations) contradicts existing claim
+  ✗ payment-method-validated-on-create → node-payment-method-validity.md
+    Reason: "validated on every order" vs "validated on create only" contradicts existing node
+
+=== Constraint Graph Complete (payment-service) ===
+
+Index:                payment-service-claims-index.md
+Domains:              Payment, Order, Identity
+Seam Constraints:     1
+Top-Level Invariants: 1
+
+Created:    10 node/seam/tli files
+Merged:     1 node file
+Conflicts:  1 (NOT written — resolve first)
+Skipped:    0
+
+⚡ UNRESOLVED CONFLICTS — action required:
+
+  node-payment-method-validity.md vs N009
+    Existing: "A payment method MUST be validated on every order."
+    New spec:  "A payment method MUST be validated on create only."
+    → Validation timing is a security and performance boundary decision.
+      Validated on every order = defense in depth, higher latency.
+      Validated on create only = trusts method state does not change post-assignment.
+      Confirm with the payments team; update the winning node and re-run.
+
+🚩 OPEN FLAGS — spec owner action required:
+
+  FLAG-001 [CANDIDATE]        §5.1 example implies a constraint on refund eligibility window.
+                              Confirm: is there a time limit on refunds? Not stated elsewhere.
+  FLAG-002 [MODAL_UNRESOLVED] N009 — source says "admin can override validation limit."
+                              MUST or MAY? Confirm intended modal with payments team.
+  FLAG-003 [UNDEFINED_TERM]   N009 — "validation limit" has no definition in spec.
+                              Spec owner must define or remove.
+
+📋 Full Node Registry:
+────────────────────────────────────────────────────────────────────
+N001 [invariant]   [Payment]  A payment method MUST NOT be expired.
+N002 [invariant]   [Order]    An order MUST require a valid payment method.
+N003 [invariant]   [Order]    An order MUST require an authenticated user.
+N004 [invariant]   [Payment]  A transaction MUST be atomic.
+N005 [invariant]   [Payment]  A refund MUST reference an existing transaction.
+N006 [invariant]   [Payment]  A retry operation MUST be idempotent.
+N007 [invariant]   [Order]    An order MUST require acknowledgment before fulfillment.
+N008 [constraint]  [Identity] A session MUST be scoped to exactly one identity at a time.
+D001 [invariant]   [Order]    An order MUST require both a valid payment method and an authenticated user.
+D002 [invariant]   [Payment]  A transaction MUST be atomic and its retry MUST be idempotent.
+SC001 [seam]       [Order↔Payment] An order MUST reference a payment method satisfying Payment domain invariants.
+────────────────────────────────────────────────────────────────────
+
+📋 Top-Level Invariants:
+────────────────────────────────────────────────────────────────────
+TLI-001 [Payment] "The Payment domain guarantees all transactions reference valid,
+                   non-expired payment methods, committed atomically, safe to retry."
+  ← N001, N004, N006
+────────────────────────────────────────────────────────────────────
 ```
 
 ---
 
 ## Created Files
 
-### Claims Index
+### Graph Index
 
-**File:** `claims/blitz-multitenancy-claims-index.md`
+**File:** `claims/payment-service-claims-index.md`
 
 ```markdown
 ---
 tags:
   - claims/index
-  - system/blitz-multitenancy
-created: 2026-02-20
-spec_file: "Multitenancy.md"
+  - system/payment-service
+created: 2026-02-22
+spec_file: "PaymentService.md"
 ---
 
-# Design Claims: blitz-multitenancy
+# Constraint Graph: payment-service
 
-A Blitz.js multitenancy implementation guide defining tenant isolation via a
-shared database. Establishes the Organization → Membership → User data model,
-session-scoped org tracking, and mandatory query/mutation filtering patterns
-that collectively enforce tenant data boundaries.
+A payment processing service spec covering transaction lifecycle, payment method
+validation, and session scoping. Defines constraints across three domains —
+Payment, Order, and Identity — with one explicit cross-domain seam between
+Order and Payment entity classes.
 
-## Claim Registry
+## Domain Map
 
-| ID      | Title                                    | Category      | File                                                    |
-|---------|------------------------------------------|---------------|---------------------------------------------------------|
-| CLM-001 | organizationId on Every Domain Model     | invariant     | [[claims/claim-organizationid-on-every-model]]          |
-| CLM-002 | Queries Must Filter by organizationId    | invariant     | [[claims/claim-query-must-filter-by-orgid]]             |
-| CLM-003 | Creates Must Attach organizationId       | postcondition | [[claims/claim-create-must-attach-orgid]]               |
-| CLM-004 | Updates/Deletes Must Include orgId Where | invariant     | [[claims/claim-update-delete-where-includes-orgid]]     |
-| CLM-005 | Session Scoped to One Org at a Time      | constraint    | [[claims/claim-session-single-context]]                 |
-| CLM-006 | Entity Assignments Target Membership     | constraint    | [[claims/claim-entity-assigned-to-membership]]          |
-| CLM-007 | Signup Atomically Creates Org + Member   | postcondition | [[claims/claim-signup-creates-org-and-membership]]      |
+| Domain   | Entity Classes                     | Node Count |
+|----------|------------------------------------|------------|
+| Payment  | PaymentMethod, Transaction, Refund | 5          |
+| Order    | Order, OrderLine                   | 4          |
+| Identity | User, Session, Membership          | 1          |
+
+## Node Registry
+
+| ID   | Title                                      | Type       | Modal    | Domain   | File                                                    |
+|------|--------------------------------------------|------------|----------|----------|---------------------------------------------------------|
+| N001 | Payment Method Must Not Be Expired         | invariant  | MUST NOT | Payment  | [[claims/node-payment-method-not-expired]]              |
+| N002 | Order Requires Valid Payment Method        | invariant  | MUST     | Order    | [[claims/node-order-requires-valid-payment]]            |
+| N003 | Order Requires Authenticated User          | invariant  | MUST     | Order    | [[claims/node-order-requires-auth-user]]                |
+| N004 | Transaction Must Be Atomic                 | invariant  | MUST     | Payment  | [[claims/node-transaction-atomic]]                      |
+| N005 | Refund References Existing Transaction     | invariant  | MUST     | Payment  | [[claims/node-refund-references-transaction]]           |
+| N006 | Retry Operation Must Be Idempotent         | invariant  | MUST     | Payment  | [[claims/node-retry-idempotent]]                        |
+| N007 | Acknowledgment Precedes Fulfillment        | invariant  | MUST     | Order    | [[claims/node-acknowledgment-precedes-fulfillment]]     |
+| N008 | Session Scoped to One Identity             | constraint | MUST NOT | Identity | [[claims/node-session-single-identity]]                 |
+| D001 | Order Requires Auth User and Valid Payment | invariant  | MUST     | Order    | [[claims/node-order-requires-auth-and-payment]]         |
+| D002 | Transaction Atomic and Retry Idempotent    | invariant  | MUST     | Payment  | [[claims/node-transaction-atomic-retry-idempotent]]     |
+
+## Seam Constraints
+
+| ID   | Statement                                                                               | Domain A | Domain B | File                                       |
+|------|-----------------------------------------------------------------------------------------|----------|----------|--------------------------------------------|
+| SC001| An order MUST reference a payment method satisfying all Payment domain invariants.      | Order    | Payment  | [[claims/seam-order-payment-method-ref]]   |
+
+## Top-Level Invariants
+
+| ID      | Statement                                                                                                     | Domain  | Composed From    |
+|---------|---------------------------------------------------------------------------------------------------------------|---------|------------------|
+| TLI-001 | The Payment domain guarantees all transactions reference valid non-expired payment methods, atomically committed and safe to retry. | Payment | N001, N004, N006 |
 
 ## Dependency Graph
 
 ```
-CLM-002 → CLM-001
-CLM-003 → CLM-001
-CLM-004 → CLM-001
-CLM-004 → CLM-005
-CLM-006 → CLM-001
+N002 → SC001 → N001
+D001 → N002
+D001 → N003
+D002 → N004
+D002 → N006
+N005 → N004
+N007 → N003
+TLI-001 ← N001, N004, N006
 ```
+
+## Open Flags
+
+| Flag ID  | Type               | Node  | Description                                       | Action Required                        |
+|----------|--------------------|-------|---------------------------------------------------|----------------------------------------|
+| FLAG-001 | CANDIDATE          | —     | §5.1 example implies a refund eligibility window  | Confirm: is there a time limit?        |
+| FLAG-002 | MODAL_UNRESOLVED   | N009  | Source says "can override" — MUST or MAY?         | Confirm modal with payments team       |
+| FLAG-003 | UNDEFINED_TERM     | N009  | "validation limit" undefined in spec              | Spec owner must define or remove       |
 
 ## Unresolved Conflicts
 
-### ⚡ CLM-NEW-008 vs [[claims/claim-superadmin-access]]
+### ⚡ N009 vs [[claims/node-payment-method-validity]]
 
 | | Statement |
 |---|---|
-| **Existing** (`claim-superadmin-access.md`) | "A SUPERADMIN MAY read data across all organizations" |
-| **New spec** (`Multitenancy.md`) | "A SUPERADMIN MUST bypass organizationId filtering on all operations, including writes" |
+| **Existing** (`node-payment-method-validity.md`) | "A payment method MUST be validated on every order." |
+| **New spec** (`PaymentService.md`) | "A payment method MUST be validated on create only." |
 
-**Action required:** MAY (read-only) vs MUST (all ops) is a meaningful security boundary.
-Confirm intended scope with the platform team before re-running.
+**Action required:** Validation timing is a security and performance boundary decision.
+Validated on every order = defense in depth but higher latency per request.
+Validated on create only = trusts that method state does not change post-assignment.
+Confirm with the payments team; update the winning node's statement and re-run.
 
 ## Source
 
-- **Spec:** `Multitenancy.md`
-- **Extracted:** 2026-02-20
+- **Spec:** `PaymentService.md`
+- **Extracted:** 2026-02-22
 ```
 
 ---
 
-### Claim Note: Invariant
+### Node Note: Invariant with Semantic Flag
 
-**File:** `claims/claim-organizationid-on-every-model.md`
+**File:** `claims/node-transaction-atomic.md`
 
 ```markdown
 ---
-id: CLM-001
+id: N004
 tags:
   - claims/invariant
-  - system/blitz-multitenancy
-  - data-modeling
-  - multitenancy
-category: invariant
-system: blitz-multitenancy
-source: "[[claims/blitz-multitenancy-claims-index]]"
-added: 2026-02-20
+  - system/payment-service
+  - domain/Payment
+  - atomic
+type: invariant
+modal: MUST
+entity_domain: Payment
+semantic_flags: [atomic]
+system: payment-service
+source: "[[claims/payment-service-claims-index]]"
+seam_constraint: false
+added: 2026-02-22
 ---
 
-# organizationId on Every Domain Model
+# Transaction Must Be Atomic
 
-> **Every domain model except User and Organization MUST carry an
-> `organizationId` foreign key referencing the owning Organization.**
+> **A transaction MUST be atomic — order creation and payment recording
+> either both succeed or neither is persisted.**
+
+## Domain
+
+**Payment** — governs the Transaction entity class and its persistence guarantees
+across the Order and Payment write path.
+
+## Sources
+
+- `§3.1 ¶2 s1` (spec)
+- `PaymentService.createOrderWithPayment() / line 47` (code — `@Transactional` annotation)
 
 ## Rationale
 
-Without an explicit `organizationId` on every entity, tenant isolation
-depends on join traversals — error-prone and easy to forget. A direct
-foreign key makes ownership visible, enforceable at the DB level, and
-indexable for query performance.
+"Partial writes — where the order is created but the payment record is not —
+leave the system in a state that cannot be automatically recovered and requires
+manual intervention to reconcile."
 
-## Violation Scenario
+## Semantic Properties
 
-A developer adds a `Comment` model linked only to `userId`. A query for
-comments filters by `where: { userId }` with no org clause. User A, who
-is also a member of Org B, reads Org B's comments by guessing a comment
-ID. No error is raised; the data leak is silent.
-
-## Assertion Hint
-
-```pseudo
-// Schema lint
-for each model in schema:
-  if model.name not in ["User", "Organization", "Membership"]:
-    assert: model has field "organizationId Int"
-    assert: model has @relation to Organization via organizationId
-
-// Migration guard
-assert: every Prisma migration that adds a new model
-        also adds an organizationId column and foreign key
-```
+| Property | Meaning in this context |
+|---|---|
+| atomic | `@Transactional` on `createOrderWithPayment()` — both the Order insert and the Transaction insert commit together or both roll back. Removing the annotation silently allows partial writes with no runtime error. |
 
 ## Dependencies
 
 None
 
----
-*Extracted from: Multitenancy.md — 2026-02-20*
-```
-
----
-
-### Claim Note: Invariant (query layer)
-
-**File:** `claims/claim-query-must-filter-by-orgid.md`
-
-```markdown
----
-id: CLM-002
-tags:
-  - claims/invariant
-  - system/blitz-multitenancy
-  - security
-  - prisma
-category: invariant
-system: blitz-multitenancy
-source: "[[claims/blitz-multitenancy-claims-index]]"
-added: 2026-02-20
----
-
-# Queries Must Filter by organizationId
-
-> **Every Prisma read query on a tenant-scoped model MUST include
-> `organizationId: ctx.session.orgId` in the `where` clause.**
-
-## Rationale
-
-A shared-database multitenant system has no network or schema barrier
-between tenants. The `organizationId` filter is the sole runtime
-enforcement mechanism — omitting it on a single query is a data-leak
-vulnerability.
-
-## Violation Scenario
-
-A query for `GET /projects?id=42` runs:
-```ts
-db.project.findFirst({ where: { id: 42 } })
-```
-User in Org A submits `id=42`, which belongs to Org B. The query succeeds
-and returns Org B's data. No authorization error fires because the record
-exists and the user is authenticated.
-
-## Assertion Hint
-
-```pseudo
-// Static analysis rule (AST lint)
-for each db.*.findFirst / findMany / findUnique call:
-  assert: where clause contains "organizationId"
-
-// Integration test — cross-tenant read attempt
-login as user_a (orgId = 1)
-seed: project { id: 99, organizationId: 2 }
-GET /projects/99 as user_a
-assert: response status is 404 or 403 — NOT 200
-```
-
-## Dependencies
-
-[[claims/claim-organizationid-on-every-model]] (CLM-001)
-
----
-*Extracted from: Multitenancy.md — 2026-02-20*
-```
-
----
-
-### Claim Note: Constraint
-
-**File:** `claims/claim-entity-assigned-to-membership.md`
-
-```markdown
----
-id: CLM-006
-tags:
-  - claims/constraint
-  - system/blitz-multitenancy
-  - data-modeling
-  - multitenancy
-category: constraint
-system: blitz-multitenancy
-source: "[[claims/blitz-multitenancy-claims-index]]"
-added: 2026-02-20
----
-
-# Entity Assignments Target Membership, Not User
-
-> **Any entity assigned to a specific person within an organization (e.g.,
-> a Task) MUST store a `membershipId` foreign key, NOT a `userId` foreign key.**
-
-## Rationale
-
-A User can belong to multiple Organizations via separate Membership records.
-Assigning to `userId` leaves org context ambiguous — which of the user's
-memberships owns this record? A `membershipId` encodes both person and org
-in a single field, making ownership unambiguous.
-
-## Violation Scenario
-
-`Task.userId = 7`. User 7 belongs to Org A and Org B. A task query filters
-by `userId: 7` without an org clause — Org A's tasks leak to Org B context.
-Worse, when the user leaves Org A, tasks remain linked to a User with no
-active Membership there; business ownership is broken even though FK
-integrity holds.
-
-## Assertion Hint
-
-```pseudo
-// Schema lint
-for each model with assignment semantics (Task, Ticket, etc.):
-  assert: model has "membershipId Int" NOT "assigneeUserId Int"
-  assert: model has @relation to Membership via membershipId
-
-// Integration test — org-scoped assignment isolation
-user_a has membership_1 (org=1) and membership_2 (org=2)
-create task with membershipId = membership_1.id
-login as user_a, orgId = 2
-GET /tasks → assert: task NOT in response
-login as user_a, orgId = 1
-GET /tasks → assert: task IS in response
-```
-
-## Dependencies
-
-[[claims/claim-organizationid-on-every-model]] (CLM-001)
-
----
-*Extracted from: Multitenancy.md — 2026-02-20*
-```
-
----
-
-### Claim Note: Postcondition
-
-**File:** `claims/claim-signup-creates-org-and-membership.md`
-
-```markdown
----
-id: CLM-007
-tags:
-  - claims/postcondition
-  - system/blitz-multitenancy
-  - data-modeling
-  - onboarding
-category: postcondition
-system: blitz-multitenancy
-source: "[[claims/blitz-multitenancy-claims-index]]"
-added: 2026-02-20
----
-
-# Signup Atomically Creates Org and Membership
-
-> **A successful user signup MUST atomically create the User, an
-> Organization, and an OWNER Membership in a single database transaction.**
-
-## Rationale
-
-If any of the three records is absent after signup, the user lands in a
-broken state: no org means `ctx.session.orgId` is null, all queries fail,
-and there is no self-service recovery path. Atomicity guarantees all three
-exist or none do.
-
-## Violation Scenario
-
-The signup mutation creates the User first, then the Organization in a
-separate call. The second call throws a DB constraint error (duplicate org
-name). The User record now exists without an Organization or Membership.
-On next login, `session.$create()` reads `memberships[0]` as `undefined`.
-`orgId` becomes `undefined`. Every subsequent query throws
-`"Missing session.orgId"`.
-
-## Assertion Hint
-
-```pseudo
-// Integration test — happy path
-POST /signup { name, email, password, orgName }
-assert: db.user.count({ where: { email } }) == 1
-assert: db.organization.count({ where: { name: orgName } }) == 1
-assert: db.membership.count({ where: { userId, role: "OWNER" } }) == 1
-assert: all three records share the same organizationId
-
-// Integration test — atomicity on failure
-mock db.organization.create to throw
-POST /signup
-assert: db.user.count({ where: { email } }) == 0  // rolled back
-```
-
-## Dependencies
+## Flags
 
 None
 
 ---
-*Extracted from: Multitenancy.md — 2026-02-20*
+*Extracted from: PaymentService.md — 2026-02-22*
 ```
 
 ---
 
-### Merged Claim Note
+### Node Note: Invariant with Ordering Flag
 
-**File:** `claims/claim-session-single-context.md` (existed before, now updated)
+**File:** `claims/node-acknowledgment-precedes-fulfillment.md`
 
 ```markdown
 ---
-id: CLM-005
+id: N007
+tags:
+  - claims/invariant
+  - system/payment-service
+  - domain/Order
+  - ordered
+type: invariant
+modal: MUST
+entity_domain: Order
+semantic_flags: [ordered]
+system: payment-service
+source: "[[claims/payment-service-claims-index]]"
+seam_constraint: false
+added: 2026-02-22
+---
+
+# Acknowledgment Precedes Fulfillment
+
+> **An order MUST require acknowledgment before fulfillment.**
+
+## Domain
+
+**Order** — governs the Order entity class lifecycle transition
+from CONFIRMED to FULFILLING state.
+
+## Sources
+
+- `§4.1 ¶1 s3` (spec — originally stated as "No order may proceed without acknowledgment")
+- `OrderService.fulfill() / line 91` (code — guard: `if (order.status != ACKNOWLEDGED) throw`)
+
+## Rationale
+
+"Fulfillment without acknowledgment means physical goods or service delivery
+may begin before the customer or downstream system has confirmed the order
+details, creating irrecoverable dispatch errors."
+
+## Semantic Properties
+
+| Property | Meaning in this context |
+|---|---|
+| ordered | The `fulfill()` method explicitly guards on `ACKNOWLEDGED` status. Swapping acknowledgment and fulfillment in the call sequence breaks the state machine — `fulfill()` throws `IllegalStateException`, not a business logic error. The ordering is load-bearing. |
+
+## Dependencies
+
+[[claims/node-order-requires-auth-user]] (N003)
+
+## Flags
+
+None
+
+---
+*Extracted from: PaymentService.md — 2026-02-22*
+```
+
+---
+
+### Node Note: Derived Node
+
+**File:** `claims/node-order-requires-auth-and-payment.md`
+
+```markdown
+---
+id: D001
+tags:
+  - claims/invariant
+  - system/payment-service
+  - domain/Order
+type: invariant
+modal: MUST
+entity_domain: Order
+semantic_flags: []
+system: payment-service
+source: "[[claims/payment-service-claims-index]]"
+seam_constraint: false
+added: 2026-02-22
+---
+
+# Order Requires Authenticated User and Valid Payment Method
+
+> **An order MUST require both an authenticated user and a valid payment
+> method before it may be created.**
+
+## Domain
+
+**Order** — governs the Order entity class creation preconditions as a
+compound constraint derived from N002 and N003.
+
+## Sources
+
+- Derived from `§2.1 ¶1` and `§2.1 ¶3` (spec — stated together as joint preconditions)
+
+## Rationale
+
+N002 and N003 are stated as a conjunct pair in §2.1 — the spec treats them
+as a single gate on order creation, not independent optional checks.
+The derivation preserves that intent as an explicit compound node.
+
+## Semantic Properties
+
+None
+
+## Dependencies
+
+[[claims/node-order-requires-valid-payment]] (N002)
+[[claims/node-order-requires-auth-user]] (N003)
+
+## Flags
+
+None
+
+---
+*Derived from: N002 ∧ N003 — PaymentService.md — 2026-02-22*
+```
+
+---
+
+### Seam Constraint Note
+
+**File:** `claims/seam-order-payment-method-ref.md`
+
+```markdown
+---
+id: SC001
+tags:
+  - claims/seam
+  - system/payment-service
+  - domain/Order
+  - domain/Payment
+type: seam
+modal: MUST
+domain_a: Order
+domain_b: Payment
+system: payment-service
+source: "[[claims/payment-service-claims-index]]"
+added: 2026-02-22
+---
+
+# Order Must Reference Valid Payment Method Across Domain Boundary
+
+> **An Order MUST reference a PaymentMethod that satisfies all Payment
+> domain invariants at the time of order creation.**
+
+## Domains
+
+**Order** → **Payment**
+
+An Order entity class holds a foreign reference to a PaymentMethod entity class
+owned by the Payment domain. The dependency is unidirectional — Order depends
+on Payment to enforce its own invariants; Payment has no knowledge of Order.
+
+## Sources
+
+- `§4.2 ¶1 s2` (spec)
+- `§4.3` (rationale — scope signal: "at the time of order creation" scopes the validity check)
+
+## Rationale
+
+"Orders created against an invalid or expired payment method will not fail
+immediately — they enter a PENDING state that cannot automatically transition
+to CONFIRMED. The resulting stuck orders require manual ops intervention."
+
+## Domain Invariants At Risk
+
+- **Order**: An order MUST require a valid payment method (N002)
+- **Payment**: A payment method MUST NOT be expired (N001)
+
+## Dependencies
+
+[[claims/node-order-requires-valid-payment]] (N002)
+[[claims/node-payment-method-not-expired]] (N001)
+
+---
+*Extracted from: PaymentService.md — 2026-02-22*
+```
+
+---
+
+### Top-Level Invariant Note
+
+**File:** `claims/tli-payment-valid-instruments.md`
+
+```markdown
+---
+id: TLI-001
+tags:
+  - claims/tli
+  - system/payment-service
+  - domain/Payment
+type: tli
+domain: Payment
+system: payment-service
+composed_from: [N001, N004, N006]
+source: "[[claims/payment-service-claims-index]]"
+added: 2026-02-22
+---
+
+# Payment Domain Guarantees Valid Non-Expired Transaction Instruments
+
+> **The Payment domain guarantees that all transactions reference valid,
+> non-expired payment methods, are committed atomically, and are safe
+> to retry without side effects.**
+
+## Domain
+
+**Payment** — covers the full transaction lifecycle from method validation
+through atomic persistence and retry safety.
+
+## Composed From
+
+| Node | Statement |
+|------|-----------|
+| [[claims/node-payment-method-not-expired]] (N001) | A payment method MUST NOT be expired. |
+| [[claims/node-transaction-atomic]] (N004)         | A transaction MUST be atomic. |
+| [[claims/node-retry-idempotent]] (N006)           | A retry operation MUST be idempotent. |
+
+## What This Guarantees
+
+Any caller of the Payment domain can assume that a successfully created
+transaction involved a non-expired, validated payment method, was committed
+atomically with no risk of partial write, and can be safely retried on network
+failure without risk of double-charge or duplicate state.
+
+## What Would Break It
+
+Violating any one of N001, N004, or N006 collapses this contract:
+- N001 violated: an expired method reaches the charge gateway, producing a
+  hard decline after order state has already been written.
+- N004 violated: a partial write leaves an Order record with no corresponding
+  Transaction — balance and order state are permanently inconsistent.
+- N006 violated: a network retry on a non-idempotent operation double-charges
+  the customer with no observable error.
+
+---
+*Composed from: PaymentService.md — 2026-02-22*
+```
+
+---
+
+### Merged Node Note
+
+**File:** `claims/node-session-single-identity.md` (existed before, now updated)
+
+```markdown
+---
+id: N008
 tags:
   - claims/constraint
-  - system/blitz-multitenancy
+  - system/payment-service
   - system/auth-service
+  - domain/Identity
   - sessions
-  - multitenancy
-category: constraint
+type: constraint
+modal: MUST NOT
+entity_domain: Identity
+semantic_flags: []
 system:
   - auth-service
-  - blitz-multitenancy
-source: "[[claims/auth-service-claims-index]]"
+  - payment-service
+sources:
+  - "[[claims/auth-service-claims-index]]"
+  - "[[claims/payment-service-claims-index]]"
+seam_constraint: false
 added: 2025-11-03
-updated: 2026-02-20
+updated: 2026-02-22
 ---
 
-# Session Scoped to One Org at a Time
+# Session Scoped to One Identity at a Time
 
-> **A user session MUST be active in exactly one organization at a time;
-> switching organizations MUST replace the previous org context.**
+> **A session MUST NOT be active in more than one organization simultaneously;
+> switching organizations MUST replace the previous org context entirely.**
+
+## Domain
+
+**Identity** — governs the Session entity class and its org-scoping invariant.
+
+## Sources
+
+- `§6.1 ¶2 s1` (spec — auth-service)
+- `§3.3 ¶1 s2` (spec — payment-service)
 
 ## Rationale
 
-Simultaneous multi-org access in a single session makes `ctx.session.orgId`
-ambiguous. A single active org enforces a clear authorization boundary:
-every query and mutation in the session knows exactly which tenant it is
-operating on.
+"Simultaneous multi-org access in a single session makes ctx.session.orgId
+ambiguous. Every query and mutation must know exactly which tenant it is
+operating on — ambiguity here is a data isolation failure, not a UX issue."
 
-## Violation Scenario
+## Semantic Properties
 
-Two browser tabs share a session. Tab A is in Org 1; Tab B switches to Org 2
-via a concurrent `$setPublicData` call. Due to a session-update race, Tab A's
-next mutation reads `orgId = 2` from the shared session and writes into Org 2
-on behalf of an Org 1 user.
+None
 
-## Assertion Hint
+## Dependencies
 
-```pseudo
-// From auth-service spec
-login → assert: session.orgId is exactly one integer, not null, not array
+None
 
-// Org switch
-$setPublicData({ orgId: newOrgId })
-assert: session.orgId == newOrgId
-assert: session.orgId != previousOrgId
-assert: subsequent queries use newOrgId, not previousOrgId
-```
+## Flags
 
-## Additional Context (blitz-multitenancy, 2026-02-20)
+None
+
+## Additional Context (payment-service, 2026-02-22)
 
 In Blitz.js, `orgId` lives in `Session.PublicData` declared in `types.ts`.
 Both `GlobalRole` and `MembershipRole` values coexist in the session `roles`
 array simultaneously. Org switching is performed via
-`session.$setPublicData({ orgId })`. The session is initialized at login with
+`session.$setPublicData({ orgId })`. The session initializes at login with
 `memberships[0].organizationId` as the default active org.
 
 ```pseudo
 // Blitz-specific initialization assertion
 POST /login
 assert: session.orgId == user.memberships[0].organizationId
-assert: session.roles includes user.role          // GlobalRole
+assert: session.roles includes user.role           // GlobalRole
 assert: session.roles includes memberships[0].role // MembershipRole
+
+// Org switch
+session.$setPublicData({ orgId: newOrgId })
+assert: session.orgId == newOrgId
+assert: session.orgId != previousOrgId
 ```
 
-*Source: Multitenancy.md*
-
-## Dependencies
-
-None
+*Source: PaymentService.md*
 
 ---
-*Sources: auth-service spec (2025-11-03), Multitenancy.md (2026-02-20)*
+*Sources: auth-service spec (2025-11-03), PaymentService.md (2026-02-22)*
 ```
 
 ---
@@ -473,7 +657,7 @@ None
 
 **User input:**
 ```
-/claims ~/docs/Multitenancy.md --system blitz-multitenancy --dry-run
+/claims ~/docs/PaymentService.md --system payment-service --dry-run
 ```
 
 **Output:**
@@ -481,25 +665,38 @@ None
 === DRY RUN — no files written ===
 
 Would create index:
-  claims/blitz-multitenancy-claims-index.md
+  claims/payment-service-claims-index.md
 
-Would create 6 claim files:
-  - claims/claim-organizationid-on-every-model.md       [invariant]
-  - claims/claim-query-must-filter-by-orgid.md          [invariant]
-  - claims/claim-create-must-attach-orgid.md            [postcondition]
-  - claims/claim-update-delete-where-includes-orgid.md  [invariant]
-  - claims/claim-entity-assigned-to-membership.md       [constraint]
-  - claims/claim-signup-creates-org-and-membership.md   [postcondition]
+Would create 8 node files:
+  - claims/node-payment-method-not-expired.md          [invariant, Payment]
+  - claims/node-order-requires-valid-payment.md        [invariant, Order]
+  - claims/node-order-requires-auth-user.md            [invariant, Order]
+  - claims/node-transaction-atomic.md                  [invariant, Payment — atomic]
+  - claims/node-refund-references-transaction.md       [invariant, Payment]
+  - claims/node-retry-idempotent.md                    [invariant, Payment — idempotent]
+  - claims/node-acknowledgment-precedes-fulfillment.md [invariant, Order — ordered]
+  - claims/node-order-requires-auth-and-payment.md     [invariant, Order — derived: D001]
+
+Would create 1 seam constraint file:
+  - claims/seam-order-payment-method-ref.md            [Order ↔ Payment]
+
+Would create 1 top-level invariant file:
+  - claims/tli-payment-valid-instruments.md            [Payment ← N001, N004, N006]
 
 Would merge into 1 existing file:
-  - claims/claim-session-single-context.md
-    New info: orgId in Blitz PublicData; $setPublicData switch; dual-role array
+  - claims/node-session-single-identity.md
+    New context: Blitz PublicData orgId shape; $setPublicData switch; dual-role array
 
 Would flag 1 conflict — NOT written:
-  ⚡ claim-superadmin-access.md vs CLM-NEW-008
-     Existing: "A SUPERADMIN MAY read data across all organizations"
-     New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
-     → Resolve before running without --dry-run
+  ⚡ node-payment-method-validity.md vs N009
+     Existing: "A payment method MUST be validated on every order."
+     New spec:  "A payment method MUST be validated on create only."
+     → Resolve before running without --dry-run.
+
+Would raise 3 flags for spec owner:
+  FLAG-001 [CANDIDATE]        §5.1 implies refund eligibility window — confirm or discard
+  FLAG-002 [MODAL_UNRESOLVED] N009 — "can override": MUST or MAY?
+  FLAG-003 [UNDEFINED_TERM]   N009 — "validation limit" undefined in spec
 
 No files written.
 ```
@@ -510,40 +707,42 @@ No files written.
 
 **User input:**
 ```
-/claims ~/docs/Multitenancy-v2.md --system blitz-multitenancy
+/claims ~/docs/PaymentService-v2.md --system payment-service
 ```
 
 **Output (excerpt):**
 ```
 ...
-  ✗ superadmin-bypasses-org-filter  → found: claim-superadmin-access.md (0.93)
-    → CONFLICT: existing scopes SUPERADMIN to reads only;
-                new spec mandates bypass on all operations including writes
+  ✗ payment-method-validated-on-create → found: node-payment-method-validity.md (0.91)
+    → CONFLICT: existing says "validated on every order";
+                new spec says "validated on create only"
     → Flagged — NOT written
-  ✗ session-orgid-nullable          → found: claim-session-single-context.md (0.87)
-    → CONFLICT: existing says orgId MUST be set after login;
-                new spec says orgId MAY be null for pending-invite users
+
+  ✗ session-orgid-nullable → found: node-session-single-identity.md (0.88)
+    → CONFLICT: existing says session.orgId MUST NOT be null after login;
+                new spec says session.orgId MAY be null for pending-invite users
     → Flagged — NOT written
 ...
 
-=== Claims Extraction Complete (blitz-multitenancy) ===
+=== Constraint Graph Complete (payment-service) ===
 
-Created:   5 claim files
-Merged:    1 claim file
-Conflicts: 2 (NOT written — resolve first)
-Skipped:   0
+Created:    6 node files
+Merged:     0 node files
+Conflicts:  2 (NOT written — resolve first)
+Skipped:    0
 
 ⚡ UNRESOLVED CONFLICTS — action required:
 
-  1. claim-superadmin-access.md vs CLM-NEW-008
-     Existing: "A SUPERADMIN MAY read data across all organizations"
-     New spec:  "A SUPERADMIN MUST bypass organizationId filtering on all operations"
-     → Read-only vs all-operations is a security boundary decision.
-       Confirm with the platform team; update the winning file's modal verb.
+  1. node-payment-method-validity.md vs N-NEW-003
+     Existing: "A payment method MUST be validated on every order."
+     New spec:  "A payment method MUST be validated on create only."
+     → Defense in depth vs trust-on-assignment is a performance and security trade-off.
+       Confirm with the payments team; update the winning node's statement and re-run.
 
-  2. claim-session-single-context.md vs CLM-NEW-005
-     Existing: "session.orgId MUST be set to an integer after login"
-     New spec:  "session.orgId MAY be null for users with pending-invite Memberships"
-     → Invited-but-not-yet-joined is a new session state not modeled in v1.
-       Scope the original claim to fully-joined users or replace it.
+  2. node-session-single-identity.md vs N-NEW-008
+     Existing: "A session MUST NOT have a null orgId after login."
+     New spec:  "A session MAY have a null orgId for users with pending-invite Memberships."
+     → Pending-invite is a new Identity lifecycle state not modeled in v1.
+       Scope the original node to fully-joined users, or replace it with a
+       conditional node that covers both states explicitly.
 ```
