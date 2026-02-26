@@ -25,11 +25,31 @@ Unlike doc summarizers or comment generators, this skill extracts the *contractu
 /plugin install claims@mtuchkov-claude-claims-skill
 ```
 
+### Codex
+
+Install from this repo using the Codex `skill-installer` skill:
+
+```bash
+scripts/install-skill-from-github.py --repo mtuchkov/claude-claims-skill --path skills/claims
+```
+
+Manual install target path is `~/.codex/skills/claims` (folder must contain `SKILL.md`).
+
 ### Manual Installation
 
 ```bash
 git clone https://github.com/mtuchkov/claude-claims-skill.git ~/.claude/skills/claims
 ```
+
+## Codex-Friendly Contribution
+
+This repository is declarative. To change behavior, edit markdown instructions, not application code:
+
+- `plugins/claims/skills/claims/SKILL.md` is the behavioral source of truth.
+- `plugins/claims/skills/claims/references/format.md` defines output templates and naming conventions.
+- `skill.json` and `plugins/claims/.claude-plugin/plugin.json` must keep the same `version`.
+
+For agent-specific contribution guidance, see `AGENTS.md`.
 
 ## Usage
 

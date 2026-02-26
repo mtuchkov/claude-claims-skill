@@ -15,6 +15,7 @@ plugins/claims/skills/claims/
     SKILL.md                                       ← Normative implementation (1,383 lines; 20 phases + 11 rules)
     references/format.md                           ← Output file format templates (6 file types)
     examples/sample-output.md                      ← Full example session output
+skills/claims/                                    ← Codex-installable skill bundle (mirrors plugins/claims/skills/claims)
 README.md                                          ← User-facing documentation
 ```
 
