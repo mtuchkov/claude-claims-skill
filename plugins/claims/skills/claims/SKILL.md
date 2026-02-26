@@ -1,8 +1,14 @@
 ---
 name: claims
-description: Build a constraint graph from a spec or codebase — extracting, normalizing, deriving, scoping, deduplicating, typing, conflict-checking, and composing constraints into top-level invariants. No implied constraints. Only explicit semantics from the source.
-argument-hint: [file-or-url] [--system <n>] [--dry-run]
-allowed-tools: Read, Write, Bash, WebFetch, mcp__qmd__vsearch, mcp__qmd__get
+description: "Build a constraint graph from a spec or codebase: extract, normalize, derive, scope, deduplicate, type, conflict-check, and compose constraints into top-level invariants. No implied constraints; only explicit semantics from the source."
+argument-hint: "[file-or-url] [--system <n>] [--dry-run]"
+allowed-tools:
+  - Read
+  - Write
+  - Bash
+  - WebFetch
+  - mcp__qmd__vsearch
+  - mcp__qmd__get
 ---
 
 # Constraint Graph Skill
